@@ -1,0 +1,2912 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- [SEC-CSP] Content Security Policy -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' https://images.unsplash.com data:; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; frame-ancestors 'none';">
+  <!-- [SEC-FLASH] Body hidden immediately — revealed only after async fingerprint check passes -->
+  <style>body{visibility:hidden}</style>
+  <!-- [SEC-INSTANT] Load auth.js early for synchronous session check -->
+  <script src="js/auth.js"></script>
+  <script>
+    // Synchronous check: redirect instantly if no session in sessionStorage at all
+    if (!getSessionSync()) { window.location.replace('login.html'); }
+  </script>
+  <title>Admin Dashboard — Solara</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { background: #F7F4F0; }
+    .admin-wrapper { display: flex; min-height: 100vh; }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 240px; flex-shrink: 0;
+      background: var(--charcoal);
+      position: fixed; top:0; left:0; bottom:0;
+      display: flex; flex-direction: column;
+      z-index: 500; overflow-y: auto;
+    }
+    .sidebar-logo {
+      padding: 1.75rem 1.5rem 1.5rem;
+      font-family: var(--font-display); font-size: 1.4rem; color: var(--white);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      text-decoration: none; display: block;
+    }
+    .sidebar-logo span { color: var(--terra-light); }
+    .sidebar-label {
+      font-size: 0.65rem; font-weight: 500; letter-spacing: 0.12em;
+      text-transform: uppercase; color: rgba(255,255,255,0.3);
+      padding: 1.5rem 1.5rem 0.5rem;
+    }
+    .sidebar-nav { list-style: none; padding: 0 0.75rem; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.65rem 0.85rem; border-radius: var(--radius-sm);
+      color: rgba(255,255,255,0.55); font-size: 0.875rem;
+      text-decoration: none; transition: all 0.2s; cursor: pointer;
+    }
+    .sidebar-nav a .nav-icon { font-size: 1rem; width: 20px; text-align: center; }
+    .sidebar-nav a:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.9); }
+    .sidebar-nav a.active { background: rgba(196,113,74,0.2); color: var(--terra-light); }
+    .sidebar-bottom { margin-top: auto; padding: 1.5rem; border-top: 1px solid rgba(255,255,255,0.08); }
+    .admin-user { display: flex; align-items: center; gap: 0.75rem; }
+    .admin-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--terra); display: flex; align-items: center; justify-content: center; font-size: 0.875rem; font-weight: 500; color: white; flex-shrink: 0; }
+
+    /* MAIN */
+    .admin-main { margin-left: 240px; flex: 1; min-height: 100vh; }
+    .admin-topbar {
+      background: var(--white); border-bottom: 1px solid var(--beige-mid);
+      padding: 0 2.5rem; height: 60px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .admin-topbar h1 { font-size: 1.2rem; font-weight: 500; font-family: var(--font-body); }
+    .topbar-actions { display: flex; align-items: center; gap: 0.75rem; }
+    .admin-content { padding: 2rem 2.5rem; }
+
+    /* KPI */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1.25rem; margin-bottom: 2rem; }
+    .kpi-card { background: var(--white); border: 1px solid var(--beige-mid); border-radius: var(--radius-lg); padding: 1.5rem; }
+    .kpi-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+    .kpi-icon { width: 40px; height: 40px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+    .kpi-badge { font-size: 0.72rem; font-weight: 500; padding: 0.25rem 0.6rem; border-radius: 999px; }
+    .kpi-badge.up { background: rgba(74,124,89,0.1); color: var(--success); }
+    .kpi-val { font-family: var(--font-display); font-size: 2rem; color: var(--charcoal); line-height: 1; margin-bottom: 0.25rem; }
+    .kpi-label { font-size: 0.78rem; color: var(--text-muted); }
+
+    /* CHARTS */
+    .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 1.25rem; margin-bottom: 2rem; }
+    .chart-card { background: var(--white); border: 1px solid var(--beige-mid); border-radius: var(--radius-lg); padding: 1.5rem; }
+    .chart-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .chart-card-header h3 { font-size: 1rem; font-weight: 500; font-family: var(--font-body); }
+
+    /* ═══ DASHBOARD v2 — Period selector + Simple/Advanced toggle ═══ */
+    .dash-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 1rem; flex-wrap: wrap; margin-bottom: 1.75rem;
+    }
+    .dash-toolbar-left { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .dash-toolbar-right { display: flex; align-items: center; gap: 0.75rem; }
+
+    /* Period selector chips */
+    .period-chips { display: flex; gap: 0.35rem; }
+    .period-chip {
+      padding: 0.35rem 0.85rem; border: 1.5px solid var(--beige-dark);
+      border-radius: 999px; font-size: 0.78rem; cursor: pointer;
+      transition: all 0.2s; background: none; color: var(--charcoal-mid);
+      font-family: var(--font-body); font-weight: 500;
+    }
+    .period-chip:hover { border-color: var(--terra); color: var(--terra); }
+    .period-chip.active { background: var(--terra); border-color: var(--terra); color: white; }
+
+    /* Custom date range */
+    .period-custom { display: none; align-items: center; gap: 0.5rem; }
+    .period-custom.visible { display: flex; }
+    .period-custom input[type="date"] {
+      padding: 0.35rem 0.6rem; border: 1.5px solid var(--beige-dark);
+      border-radius: var(--radius-sm); font-size: 0.78rem;
+      font-family: var(--font-body); color: var(--charcoal);
+      background: var(--white); outline: none;
+    }
+    .period-custom input[type="date"]:focus { border-color: var(--terra); }
+
+    /* Advanced toggle */
+    .dash-toggle {
+      display: flex; align-items: center; gap: 0.6rem;
+      font-size: 0.8rem; color: var(--charcoal-mid); cursor: pointer;
+      padding: 0.35rem 1rem; border: 1.5px solid var(--beige-dark);
+      border-radius: 999px; background: none; transition: all 0.25s;
+      font-family: var(--font-body); font-weight: 500;
+    }
+    .dash-toggle:hover { border-color: var(--ocean); color: var(--ocean); }
+    .dash-toggle.active {
+      background: var(--ocean); border-color: var(--ocean); color: white;
+    }
+    .dash-toggle-switch {
+      width: 32px; height: 18px; border-radius: 999px;
+      background: var(--beige-dark); position: relative;
+      transition: background 0.25s; flex-shrink: 0;
+    }
+    .dash-toggle.active .dash-toggle-switch { background: rgba(255,255,255,0.4); }
+    .dash-toggle-switch::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: white; transition: transform 0.25s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .dash-toggle.active .dash-toggle-switch::after { transform: translateX(14px); }
+
+    /* Period label */
+    .dash-period-label {
+      font-size: 0.75rem; color: var(--text-muted);
+      font-style: italic; margin-bottom: 0.25rem;
+    }
+
+    /* Simple dashboard specific */
+    .dash-simple-kpi { display: grid; grid-template-columns: repeat(3,1fr); gap: 1.25rem; margin-bottom: 2rem; }
+    .dash-kpi-big {
+      background: var(--white); border: 1px solid var(--beige-mid);
+      border-radius: var(--radius-lg); padding: 1.75rem 1.5rem;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .dash-kpi-big::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .dash-kpi-big.revenue::before { background: var(--terra); }
+    .dash-kpi-big.occupation::before { background: var(--ocean); }
+    .dash-kpi-big.bookings::before { background: #4A7B5C; }
+    .dash-kpi-big .kpi-big-icon {
+      width: 48px; height: 48px; border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; margin: 0 auto 1rem;
+    }
+    .dash-kpi-big .kpi-big-val {
+      font-family: var(--font-display); font-size: 2.4rem;
+      color: var(--charcoal); line-height: 1; margin-bottom: 0.35rem;
+    }
+    .dash-kpi-big .kpi-big-label {
+      font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.75rem;
+    }
+    .dash-kpi-big .kpi-big-sub {
+      font-size: 0.75rem; color: var(--charcoal-mid);
+      padding-top: 0.75rem; border-top: 1px solid var(--beige-mid);
+    }
+    .dash-kpi-big .kpi-big-sub strong { color: var(--charcoal); }
+
+    /* Occupation gauge */
+    .occ-gauge {
+      width: 120px; height: 120px; border-radius: 50%;
+      margin: 0 auto 1rem; position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .occ-gauge canvas { position: absolute; top: 0; left: 0; }
+    .occ-gauge-val {
+      font-family: var(--font-display); font-size: 2rem;
+      color: var(--ocean); position: relative; z-index: 1;
+    }
+
+    /* Mini sparkline row */
+    .dash-spark-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 2rem; }
+    .dash-spark-card {
+      background: var(--white); border: 1px solid var(--beige-mid);
+      border-radius: var(--radius-lg); padding: 1.25rem 1.5rem;
+    }
+    .dash-spark-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .dash-spark-label { font-size: 0.82rem; color: var(--text-muted); }
+    .dash-spark-val { font-family: var(--font-display); font-size: 1.3rem; color: var(--charcoal); }
+
+    /* Advanced dashboard */
+    .dash-advanced { display: none; }
+    .dash-advanced.visible { display: block; }
+
+    .adv-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 2rem; }
+    .adv-grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 1.25rem; margin-bottom: 2rem; }
+
+    /* Comparison card */
+    .adv-compare-card {
+      background: var(--white); border: 1px solid var(--beige-mid);
+      border-radius: var(--radius-lg); padding: 1.5rem;
+    }
+    .adv-compare-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.65rem 0; border-bottom: 1px solid var(--beige-mid);
+    }
+    .adv-compare-row:last-child { border-bottom: none; }
+    .adv-compare-label { font-size: 0.82rem; color: var(--charcoal-mid); }
+    .adv-compare-vals { display: flex; align-items: center; gap: 1rem; }
+    .adv-compare-cur { font-weight: 600; font-size: 0.9rem; color: var(--charcoal); }
+    .adv-compare-prev { font-size: 0.78rem; color: var(--text-muted); }
+    .adv-compare-delta {
+      font-size: 0.72rem; font-weight: 600; padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+    }
+    .adv-compare-delta.up { background: rgba(74,124,89,0.1); color: #4A7B5C; }
+    .adv-compare-delta.down { background: rgba(176,74,74,0.1); color: #B04A4A; }
+    .adv-compare-delta.neutral { background: rgba(150,150,150,0.1); color: #888; }
+
+    /* Property performance table */
+    .adv-perf-table { width: 100%; border-collapse: collapse; }
+    .adv-perf-table th {
+      text-align: left; padding: 0.6rem 0.75rem;
+      font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--text-muted);
+      border-bottom: 1.5px solid var(--beige-mid);
+    }
+    .adv-perf-table td {
+      padding: 0.75rem; font-size: 0.85rem;
+      border-bottom: 1px solid var(--beige-mid); vertical-align: middle;
+    }
+    .adv-perf-table tr:last-child td { border-bottom: none; }
+    .adv-perf-table tr:hover td { background: var(--beige); }
+
+    /* Progress bar for performance */
+    .perf-bar-track {
+      height: 6px; background: var(--beige-mid); border-radius: 3px;
+      overflow: hidden; width: 80px;
+    }
+    .perf-bar-fill {
+      height: 100%; border-radius: 3px; transition: width 0.4s;
+    }
+
+    /* Trend badge */
+    .trend-badge {
+      display: inline-flex; align-items: center; gap: 0.2rem;
+      font-size: 0.72rem; font-weight: 600; padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+    }
+    .trend-badge.up { background: rgba(74,124,89,0.1); color: #4A7B5C; }
+    .trend-badge.down { background: rgba(176,74,74,0.1); color: #B04A4A; }
+    .trend-badge.neutral { background: rgba(150,150,150,0.1); color: #888; }
+
+    @media(max-width:900px) {
+      .dash-simple-kpi { grid-template-columns: 1fr; }
+      .dash-spark-row { grid-template-columns: 1fr; }
+      .adv-grid-2, .adv-grid-3 { grid-template-columns: 1fr; }
+      .period-chips { flex-wrap: wrap; }
+    }
+
+    /* TABLE */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+      text-align: left; padding: 0.75rem 1rem;
+      font-size: 0.72rem; font-weight: 500; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--text-muted);
+      border-bottom: 1.5px solid var(--beige-mid); white-space: nowrap;
+    }
+    .data-table td { padding: 0.9rem 1rem; font-size: 0.875rem; border-bottom: 1px solid var(--beige-mid); vertical-align: middle; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--beige); }
+    .status-pill { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.72rem; font-weight: 500; }
+    .status-confirmed { background: rgba(74,124,89,0.1); color: var(--success); }
+    .status-pending   { background: rgba(196,145,74,0.12); color: var(--warning); }
+    .status-cancelled { background: rgba(176,74,74,0.1); color: var(--danger); }
+    .status-acompte   { background: rgba(42,100,120,0.1); color: #2A6478; }
+
+    /* PROPERTY GRID */
+    .prop-mgmt-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap: 1.25rem; }
+    .prop-mgmt-card { background: var(--white); border: 1px solid var(--beige-mid); border-radius: var(--radius-lg); overflow: hidden; transition: box-shadow 0.2s; }
+    .prop-mgmt-card:hover { box-shadow: var(--shadow-sm); }
+    .prop-mgmt-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+    .prop-mgmt-body { padding: 1rem; }
+    .prop-mgmt-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--beige-mid); }
+
+    /* MODAL — form grid */
+    .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .col-span-2 { grid-column: span 2; }
+
+    /* FILTER CHIPS */
+    .filter-chip {
+      padding: 0.3rem 0.75rem; border: 1.5px solid var(--beige-dark);
+      border-radius: 999px; font-size: 0.8rem; cursor: pointer;
+      transition: all 0.2s; background: none; color: var(--charcoal-mid);
+      font-family: var(--font-body);
+    }
+    .filter-chip:hover { border-color: var(--terra); color: var(--terra); }
+    .filter-chip.active { background: var(--terra); border-color: var(--terra); color: white; }
+    .sort-select {
+      padding: 0.45rem 0.9rem; border: 1.5px solid var(--beige-dark);
+      border-radius: var(--radius-sm); font-family: var(--font-body); font-size: 0.82rem;
+      background: var(--white); cursor: pointer; color: var(--charcoal); outline: none;
+    }
+
+    /* ═══════════════════════════════════════════
+       CALENDAR v2 — Visual Planning Board
+       ═══════════════════════════════════════════ */
+
+    /* Toolbar */
+    .cal-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;
+    }
+    .cal-nav-group { display: flex; align-items: center; gap: 0.5rem; }
+    .cal-month-title {
+      font-family: var(--font-display); font-size: 1.5rem; font-weight: 400;
+      color: var(--ocean); min-width: 210px; text-align: center; margin: 0;
+    }
+    .cal-nav-btn {
+      background: var(--white); border: 1.5px solid var(--beige-dark);
+      border-radius: var(--radius-sm); width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 1rem; color: var(--charcoal);
+      transition: all 0.2s; font-family: var(--font-body);
+    }
+    .cal-nav-btn:hover { border-color: var(--terra); color: var(--terra); background: rgba(196,113,74,0.04); }
+    .cal-today-btn {
+      padding: 0.3rem 0.85rem; background: var(--white);
+      border: 1.5px solid var(--beige-dark); border-radius: var(--radius-pill);
+      font-size: 0.78rem; cursor: pointer; color: var(--ocean);
+      font-family: var(--font-body); transition: all 0.2s; font-weight: 500;
+    }
+    .cal-today-btn:hover { border-color: var(--ocean); background: rgba(42,100,120,0.05); }
+
+    /* Filter bar */
+    .cal-filter-bar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .cal-status-chip {
+      padding: 0.25rem 0.7rem; border: 1.5px solid var(--beige-dark);
+      border-radius: 999px; font-size: 0.73rem; cursor: pointer;
+      background: none; color: var(--charcoal-mid); font-family: var(--font-body);
+      transition: all 0.2s; display: flex; align-items: center; gap: 0.3rem;
+    }
+    .cal-status-chip:hover { border-color: var(--ocean); color: var(--ocean); }
+    .cal-status-chip.active { background: var(--ocean); border-color: var(--ocean); color: white; }
+
+    /* Legend */
+    .cal-legend-wrap {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 1rem; flex-wrap: wrap;
+      background: var(--beige); border: 1px solid var(--beige-mid);
+      border-radius: var(--radius-md); padding: 0.7rem 1rem;
+      margin-bottom: 1rem;
+    }
+    .cal-prop-legend { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .cal-prop-legend-label { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-right: 0.25rem; }
+    .cal-legend-item {
+      display: flex; align-items: center; gap: 0.4rem;
+      font-size: 0.76rem; color: var(--charcoal); cursor: pointer;
+      padding: 0.2rem 0.5rem; border-radius: 999px;
+      transition: background 0.2s;
+    }
+    .cal-legend-item:hover { background: rgba(0,0,0,0.05); }
+    .cal-legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .cal-status-legend { display: flex; align-items: center; gap: 0.85rem; flex-shrink: 0; }
+    .cal-status-legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.71rem; color: var(--text-muted); }
+    .cal-status-swatch { width: 28px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+    .cal-status-swatch.confirmed { background: rgba(74,124,89,0.85); }
+    .cal-status-swatch.acompte  { background: rgba(42,100,120,0.85); }
+    .cal-status-swatch.pending {
+      background: rgba(196,154,74,0.7);
+      background-image: repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.4) 2px, rgba(255,255,255,0.4) 4px);
+    }
+    .cal-status-swatch.cancelled { background: rgba(150,150,150,0.4); }
+
+    /* Layout */
+    .cal-layout {
+      display: grid; grid-template-columns: 1fr 290px;
+      gap: 1.25rem; align-items: start;
+    }
+
+    /* Day names header */
+    .cal-daynames-row {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      background: linear-gradient(to bottom, #f0ebe4, var(--beige));
+      border: 1px solid var(--beige-mid);
+      border-radius: var(--radius-md) var(--radius-md) 0 0;
+    }
+    .cal-dn {
+      padding: 0.55rem 0; text-align: center;
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--charcoal-mid);
+    }
+    .cal-dn.weekend { color: var(--terra); }
+
+    /* Outer calendar container */
+    .cal-outer {
+      position: relative;
+      border: 1px solid var(--beige-mid);
+      border-top: none;
+      border-radius: 0 0 var(--radius-md) var(--radius-md);
+      overflow: hidden;
+      background: var(--beige-mid); /* gap color between cells */
+    }
+
+    /* Day cells grid */
+    .cal-days-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      gap: 1px; position: relative; z-index: 1;
+    }
+    .cal-day-cell {
+      height: 110px;
+      background: var(--white);
+      padding: 5px 4px 4px;
+      position: relative;
+      cursor: default;
+      transition: background 0.15s;
+      overflow: hidden;
+    }
+    .cal-day-cell.other-month { background: #f8f5f0; }
+    .cal-day-cell.today { background: #fff9f5; }
+    .cal-day-cell.today .cal-day-num {
+      background: var(--terra); color: white;
+      box-shadow: 0 2px 8px rgba(196,113,74,0.35);
+    }
+    .cal-day-cell.weekend .cal-day-num { color: var(--terra); }
+    .cal-day-cell.weekend { background: #fdf9f5; }
+    .cal-day-cell.has-booking { cursor: pointer; }
+
+    /* Free day indicator */
+    .cal-day-cell.free-day::before {
+      content: '';
+      position: absolute; bottom: 4px; right: 4px;
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: rgba(74,124,89,0.3);
+    }
+
+    /* Day number */
+    .cal-day-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 50%;
+      font-size: 0.75rem; font-weight: 500; color: var(--charcoal);
+      transition: background 0.2s, color 0.2s;
+      flex-shrink: 0;
+    }
+    .cal-day-cell.other-month .cal-day-num { color: var(--text-muted); opacity: 0.45; }
+
+    /* Overflow indicator */
+    .cal-overflow-badge {
+      position: absolute; bottom: 4px; right: 4px;
+      font-size: 0.58rem; font-weight: 600; color: var(--text-muted);
+      background: var(--beige); border-radius: 999px;
+      padding: 1px 5px; letter-spacing: 0.03em;
+    }
+
+    /* Events absolute layer */
+    .cal-events-layer {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    /* Individual event block */
+    .cal-event-block {
+      position: absolute;
+      height: 20px;
+      display: flex; align-items: center;
+      padding: 0 7px;
+      font-size: 0.65rem; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: filter 0.15s, transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+      letter-spacing: 0.01em;
+    }
+    .cal-event-block:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px) scaleY(1.05);
+      box-shadow: 0 3px 10px rgba(0,0,0,0.18);
+      z-index: 100 !important;
+    }
+    .cal-event-block.pending {
+      background-image: repeating-linear-gradient(
+        45deg, transparent, transparent 3px,
+        rgba(255,255,255,0.35) 3px, rgba(255,255,255,0.35) 6px
+      ) !important;
+    }
+    .cal-event-block.cancelled {
+      opacity: 0.38;
+      filter: grayscale(0.6);
+    }
+    .cal-event-start { border-radius: 4px 0 0 4px; }
+    .cal-event-end   { border-radius: 0 4px 4px 0; }
+    .cal-event-solo  { border-radius: 4px; }
+    .cal-event-mid   { border-radius: 0; }
+
+    /* Tooltip */
+    .cal-tooltip {
+      position: fixed;
+      background: #1a1a1a;
+      color: white; border-radius: var(--radius-md);
+      padding: 0.8rem 1rem;
+      font-size: 0.78rem; z-index: 9999;
+      pointer-events: none; opacity: 0;
+      transition: opacity 0.15s;
+      max-width: 250px; min-width: 180px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+      line-height: 1.55;
+    }
+    .cal-tooltip.visible { opacity: 1; }
+    .cal-tooltip-prop-dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 2px; margin-right: 4px; vertical-align: middle;
+    }
+    .cal-tooltip-title { font-weight: 700; font-size: 0.84rem; margin-bottom: 0.4rem; }
+    .cal-tooltip-row {
+      display: flex; align-items: center; gap: 0.35rem;
+      color: rgba(255,255,255,0.75); font-size: 0.73rem; margin-bottom: 0.1rem;
+    }
+    .cal-tooltip-hint { font-size: 0.62rem; opacity: 0.45; margin-top: 0.4rem; text-align: right; }
+
+    /* Sidebar cards */
+    .cal-sidebar { display: flex; flex-direction: column; gap: 1rem; }
+    .cal-sidebar-card {
+      background: var(--white); border: 1px solid var(--beige-mid);
+      border-radius: var(--radius-lg); padding: 1.1rem 1.25rem;
+    }
+    .cal-sidebar-title {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text-muted);
+      margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem;
+    }
+    .cal-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+    .cal-summary-item {
+      background: var(--beige); border-radius: var(--radius-sm);
+      padding: 0.6rem 0.75rem; text-align: center;
+    }
+    .cal-summary-num {
+      font-family: var(--font-display); font-size: 1.5rem;
+      color: var(--ocean); line-height: 1;
+    }
+    .cal-summary-label { font-size: 0.65rem; color: var(--text-muted); margin-top: 0.15rem; }
+
+    .cal-arrival-item {
+      display: flex; align-items: flex-start; gap: 0.65rem;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid var(--beige-mid);
+      animation: slideInLeft 0.3s var(--ease-out) both;
+    }
+    .cal-arrival-item:last-child { border-bottom: none; padding-bottom: 0; }
+    @keyframes slideInLeft {
+      from { opacity: 0; transform: translateX(-8px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .cal-arrival-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0; margin-top: 4px;
+    }
+    .cal-arrival-name { font-size: 0.82rem; font-weight: 600; color: var(--charcoal); }
+    .cal-arrival-prop { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.05rem; }
+    .cal-arrival-date { font-size: 0.68rem; color: var(--ocean); margin-top: 0.05rem; font-weight: 500; }
+    .cal-arrival-amount {
+      margin-left: auto; flex-shrink: 0;
+      font-size: 0.78rem; font-weight: 600; color: var(--terra);
+      font-family: var(--font-display);
+    }
+
+    /* Detail modal */
+    .cal-detail-header {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.85rem 1.1rem;
+      border-radius: var(--radius-md); margin-bottom: 1.25rem;
+    }
+    .cal-detail-prop-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+    .cal-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .cal-detail-item {
+      background: var(--beige); border-radius: var(--radius-sm);
+      padding: 0.65rem 0.85rem;
+    }
+    .cal-detail-item label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 0.2rem; }
+    .cal-detail-item span { font-size: 0.88rem; font-weight: 500; color: var(--charcoal); }
+    .cal-detail-item.span-2 { grid-column: span 2; }
+
+    @media(max-width:1100px) {
+      .cal-layout { grid-template-columns: 1fr; }
+      .cal-sidebar { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+    }
+    @media(max-width:768px) {
+      .cal-toolbar { flex-direction: column; align-items: flex-start; }
+      .cal-day-cell { height: 80px; }
+    }
+
+    /* DELETE CONFIRM color */
+    .btn-danger { background: rgba(176,74,74,0.1); color: var(--danger); border: none; font-family:var(--font-body); font-size:0.8rem; padding:0.4rem 0.8rem; border-radius:var(--radius-sm); cursor:pointer; transition:all 0.2s; }
+    .btn-danger:hover { background: var(--danger); color:white; }
+
+    /* Empty state */
+    .empty-state { text-align:center; padding:3rem 2rem; color:var(--text-muted); }
+    .empty-state .ei { font-size:2.5rem; margin-bottom:0.75rem; }
+
+    /* ── IMAGE UPLOAD ZONE ── */
+    .drop-zone {
+      border: 2px dashed var(--beige-dark); border-radius: var(--radius-md);
+      padding: 1.75rem 1rem; text-align: center; cursor: pointer;
+      transition: all 0.25s; background: var(--beige); position: relative;
+    }
+    .drop-zone:hover { border-color: var(--terra); background: rgba(196,113,74,0.04); }
+    .drop-zone.dragover { border-color: var(--terra); background: rgba(196,113,74,0.08); transform: scale(1.01); }
+    .drop-zone .drop-icon { font-size: 2rem; display: block; margin-bottom: 0.4rem; }
+    .drop-zone p { margin: 0.2rem 0; font-size: 0.82rem; color: var(--text-muted); }
+    .drop-zone .drop-hint { font-size: 0.72rem; color: var(--charcoal-mid); opacity: 0.5; }
+    .drop-zone .drop-formats { font-size: 0.68rem; color: var(--text-muted); margin-top: 0.5rem; }
+    .drop-zone .browse-label {
+      display: inline-block; padding: 0.35rem 1rem; margin-top: 0.3rem;
+      border: 1.5px solid var(--beige-dark); border-radius: var(--radius-sm);
+      font-size: 0.8rem; color: var(--charcoal-mid); cursor: pointer;
+      transition: all 0.2s; font-family: var(--font-body);
+    }
+    .drop-zone .browse-label:hover { border-color: var(--terra); color: var(--terra); }
+
+    .img-preview-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+      gap: 0.6rem; margin-top: 0.75rem;
+    }
+    .img-preview-item {
+      position: relative; aspect-ratio: 1; border-radius: var(--radius-sm);
+      overflow: hidden; cursor: grab; border: 2px solid transparent;
+      transition: border-color 0.2s, opacity 0.2s; background: var(--beige);
+    }
+    .img-preview-item:first-child { border-color: var(--terra); }
+    .img-preview-item img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+    .img-preview-item .remove-img {
+      position: absolute; top: 3px; right: 3px; width: 20px; height: 20px;
+      border-radius: 50%; background: rgba(0,0,0,0.6); color: white;
+      border: none; font-size: 0.65rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.2s; line-height: 1;
+    }
+    .img-preview-item:hover .remove-img { opacity: 1; }
+    .img-preview-item.dragging { opacity: 0.3; }
+    .img-preview-item .main-label {
+      position: absolute; bottom: 3px; left: 3px; font-size: 0.55rem;
+      background: var(--terra); color: white; padding: 1px 5px;
+      border-radius: 999px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .img-progress {
+      height: 3px; background: var(--beige-mid); border-radius: 2px;
+      margin-top: 0.4rem; overflow: hidden; display: none;
+    }
+    .img-progress.active { display: block; }
+    .img-progress-bar {
+      height: 100%; background: var(--terra); border-radius: 2px;
+      transition: width 0.3s; width: 0%;
+    }
+    .img-error {
+      font-size: 0.75rem; color: var(--danger); margin-top: 0.4rem;
+      display: none; align-items: center; gap: 0.3rem;
+    }
+    .img-error.visible { display: flex; }
+
+    @media(max-width:1100px) { .kpi-grid { grid-template-columns: repeat(2,1fr); } }
+    @media(max-width:900px) { .charts-row { grid-template-columns: 1fr; } .admin-main { margin-left:0; } .sidebar { display:none; } }
+  </style>
+</head>
+<body>
+<div class="admin-wrapper">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <a href="index.html" class="sidebar-logo">Sol<span>ara</span> Pro</a>
+    <div class="sidebar-label">Menu</div>
+    <ul class="sidebar-nav">
+      <li><a onclick="switchTab('stats')"    id="nav-stats"><span class="nav-icon">📊</span> Dashboard</a></li>
+      <li><a onclick="switchTab('props')"    id="nav-props"><span class="nav-icon">🏠</span> Propriétés</a></li>
+      <li><a onclick="switchTab('res')"      id="nav-res"><span class="nav-icon">📋</span> Réservations</a></li>
+      <li><a onclick="switchTab('calendar')" id="nav-calendar"><span class="nav-icon">🗓</span> Calendrier</a></li>
+      <li><a onclick="switchTab('clients')"  id="nav-clients"><span class="nav-icon">👥</span> Clients</a></li>
+      <li><a onclick="switchTab('invoices')" id="nav-invoices"><span class="nav-icon">🧾</span> Factures</a></li>
+      <li><a onclick="switchTab('seasons')"  id="nav-seasons"><span class="nav-icon">📅</span> Tarifs saisonniers</a></li>
+    </ul>
+    <div class="sidebar-label">Compte</div>
+    <ul class="sidebar-nav">
+      <li><a href="index.html"><span class="nav-icon">🌐</span> Voir le site</a></li>
+      <li><a onclick="logout()" style="color:rgba(255,255,255,0.4)"><span class="nav-icon">🚪</span> Déconnexion</a></li>
+    </ul>
+    <div class="sidebar-bottom">
+      <div class="admin-user">
+        <div class="admin-avatar">AD</div>
+        <div>
+          <div style="font-size:0.875rem;color:rgba(255,255,255,0.8)" id="adminUserName">Admin</div>
+          <div style="font-size:0.72rem;color:rgba(255,255,255,0.35)">Administrateur</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="admin-main">
+    <div class="admin-topbar">
+      <h1 id="topbarTitle">Tableau de bord</h1>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm" onclick="switchTab('props')">🏠 Propriétés (<span id="topbarPropCount">0</span>)</button>
+        <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ Ajouter une propriété</button>
+      </div>
+    </div>
+
+    <div class="admin-content">
+
+      <!-- ══ STATS — Dual Dashboard ══ -->
+      <div id="panel-stats">
+
+        <!-- Toolbar: Period selector + Advanced toggle -->
+        <div class="dash-toolbar">
+          <div class="dash-toolbar-left">
+            <div class="period-chips">
+              <button class="period-chip" onclick="setPeriod('day',this)">Jour</button>
+              <button class="period-chip" onclick="setPeriod('week',this)">Semaine</button>
+              <button class="period-chip active" onclick="setPeriod('month',this)">Mois</button>
+              <button class="period-chip" onclick="setPeriod('year',this)">Année</button>
+              <button class="period-chip" onclick="setPeriod('custom',this)">Personnalisé</button>
+            </div>
+            <div class="period-custom" id="periodCustom">
+              <input type="date" id="periodFrom" onchange="applyCustomPeriod()">
+              <span style="font-size:0.78rem;color:var(--text-muted)">→</span>
+              <input type="date" id="periodTo" onchange="applyCustomPeriod()">
+            </div>
+          </div>
+          <div class="dash-toolbar-right">
+            <button class="dash-toggle" id="dashToggle" onclick="toggleAdvanced()">
+              <span class="dash-toggle-switch"></span>
+              <span>Vue avancée</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="dash-period-label" id="dashPeriodLabel">Période : ce mois-ci</div>
+
+        <!-- ═══ SIMPLE DASHBOARD ═══ -->
+        <div id="dashSimple">
+
+          <!-- 3 big KPIs -->
+          <div class="dash-simple-kpi" id="dashSimpleKpi"></div>
+
+          <!-- Revenue chart + Occupation gauge -->
+          <div class="charts-row">
+            <div class="chart-card">
+              <div class="chart-card-header">
+                <h3 id="simpleChartTitle">Revenus sur la période</h3>
+              </div>
+              <canvas id="revenueChart" style="width:100%;height:200px"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-header"><h3>Taux d'occupation</h3></div>
+              <div style="display:flex;justify-content:center;padding:1rem 0">
+                <div class="occ-gauge">
+                  <canvas id="occGauge" width="120" height="120"></canvas>
+                  <span class="occ-gauge-val" id="occGaugeVal">0%</span>
+                </div>
+              </div>
+              <div id="occDetails" style="text-align:center;font-size:0.82rem;color:var(--charcoal-mid)"></div>
+            </div>
+          </div>
+
+          <!-- Recent reservations -->
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <h3>Réservations récentes</h3>
+              <button class="btn btn-ghost btn-sm" onclick="switchTab('res')">Voir toutes →</button>
+            </div>
+            <div style="overflow-x:auto"><table class="data-table" id="recentResTable"></table></div>
+          </div>
+        </div>
+
+        <!-- ═══ ADVANCED DASHBOARD ═══ -->
+        <div class="dash-advanced" id="dashAdvanced">
+
+          <!-- Comparison with previous period -->
+          <div class="adv-grid-2">
+            <div class="adv-compare-card">
+              <div class="chart-card-header"><h3>Comparaison avec la période précédente</h3></div>
+              <div id="advCompareRows"></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-header"><h3>Répartition des statuts</h3></div>
+              <div style="display:flex;justify-content:center;padding:1rem 0">
+                <canvas id="advStatusDonut" width="160" height="160"></canvas>
+              </div>
+              <div id="advStatusLegend" style="display:flex;justify-content:center;gap:1.25rem;margin-top:0.5rem;flex-wrap:wrap"></div>
+            </div>
+          </div>
+
+          <!-- Trend chart -->
+          <div class="chart-card" style="margin-bottom:2rem">
+            <div class="chart-card-header">
+              <h3>Tendance des revenus (12 derniers mois)</h3>
+            </div>
+            <canvas id="advTrendChart" style="width:100%;height:220px"></canvas>
+          </div>
+
+          <!-- Performance per property -->
+          <div class="chart-card" style="margin-bottom:2rem">
+            <div class="chart-card-header">
+              <h3>Performance par propriété</h3>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="adv-perf-table" id="advPerfTable"></table>
+            </div>
+          </div>
+
+          <!-- Revenue by property bar chart + avg stay duration -->
+          <div class="adv-grid-2">
+            <div class="chart-card">
+              <div class="chart-card-header"><h3>Revenus par propriété</h3></div>
+              <canvas id="advPropRevenueChart" style="width:100%;height:200px"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-header"><h3>Indicateurs clés avancés</h3></div>
+              <div id="advKeyMetrics"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ══ PROPERTIES ══ -->
+      <div id="panel-props" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
+          <div style="font-size:0.9rem;color:var(--text-muted)">
+            <strong id="propCount" style="color:var(--charcoal)">0</strong> propriétés enregistrées
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ Ajouter une propriété</button>
+        </div>
+        <div class="prop-mgmt-grid" id="propMgmtGrid"></div>
+      </div>
+
+      <!-- ══ RESERVATIONS ══ -->
+      <div id="panel-res" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <button class="filter-chip active" onclick="filterRes(this,'all')">Toutes</button>
+            <button class="filter-chip" onclick="filterRes(this,'confirmed')">Confirmées</button>
+            <button class="filter-chip" onclick="filterRes(this,'acompte')">Acompte</button>
+            <button class="filter-chip" onclick="filterRes(this,'pending')">En attente</button>
+            <button class="filter-chip" onclick="filterRes(this,'cancelled')">Annulées</button>
+          </div>
+          <input type="text" class="form-input" style="width:220px" placeholder="Rechercher…" oninput="searchRes(this.value)">
+        </div>
+        <div class="chart-card" style="padding:0;overflow:hidden">
+          <div style="overflow-x:auto"><table class="data-table" id="fullResTable"></table></div>
+        </div>
+      </div>
+
+      <!-- ══ CALENDAR ══ -->
+      <div id="panel-calendar" style="display:none">
+
+        <!-- Toolbar -->
+        <div class="cal-toolbar">
+          <div class="cal-nav-group">
+            <button class="cal-nav-btn" onclick="calNav(-1)" title="Mois précédent">‹</button>
+            <h3 class="cal-month-title" id="calTitle">Juillet 2025</h3>
+            <button class="cal-nav-btn" onclick="calNav(1)" title="Mois suivant">›</button>
+            <button class="cal-today-btn" onclick="calGoToday()">Aujourd'hui</button>
+          </div>
+          <div class="cal-filter-bar">
+            <select id="calPropFilter" class="sort-select" onchange="calFilterProp=this.value;renderCalendar()">
+              <option value="">🏠 Toutes les propriétés</option>
+            </select>
+            <div style="display:flex;gap:0.35rem">
+              <button class="cal-status-chip active" onclick="calSetStatus(this,'all')">Toutes</button>
+              <button class="cal-status-chip" onclick="calSetStatus(this,'confirmed')" style="color:#4A7B5C">✓ Confirmées</button>
+              <button class="cal-status-chip" onclick="calSetStatus(this,'acompte')" style="color:#2A6478">◐ Acompte</button>
+              <button class="cal-status-chip" onclick="calSetStatus(this,'pending')" style="color:#C49A4A">⏳ Attente</button>
+              <button class="cal-status-chip" onclick="calSetStatus(this,'cancelled')" style="color:#B04A4A">✕ Annulées</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="cal-legend-wrap">
+          <div class="cal-prop-legend">
+            <span class="cal-prop-legend-label">Propriétés :</span>
+            <div id="calLegend" style="display:flex;flex-wrap:wrap;gap:0.4rem"></div>
+          </div>
+          <div class="cal-status-legend">
+            <div class="cal-status-legend-item">
+              <span class="cal-status-swatch confirmed"></span> Confirmée
+            </div>
+            <div class="cal-status-legend-item">
+              <span class="cal-status-swatch acompte"></span> Acompte
+            </div>
+            <div class="cal-status-legend-item">
+              <span class="cal-status-swatch pending"></span> En attente
+            </div>
+            <div class="cal-status-legend-item">
+              <span class="cal-status-swatch cancelled"></span> Annulée
+            </div>
+          </div>
+        </div>
+
+        <!-- Calendar grid + sidebar -->
+        <div class="cal-layout">
+          <div>
+            <!-- Day names -->
+            <div class="cal-daynames-row" id="calDaynames">
+              <div class="cal-dn">Lun</div>
+              <div class="cal-dn">Mar</div>
+              <div class="cal-dn">Mer</div>
+              <div class="cal-dn">Jeu</div>
+              <div class="cal-dn">Ven</div>
+              <div class="cal-dn weekend">Sam</div>
+              <div class="cal-dn weekend">Dim</div>
+            </div>
+            <!-- Outer calendar -->
+            <div class="cal-outer" id="calOuter">
+              <div class="cal-days-grid" id="calDaysGrid"></div>
+              <div class="cal-events-layer" id="calEventsLayer"></div>
+            </div>
+          </div>
+
+          <!-- Sidebar -->
+          <aside class="cal-sidebar">
+            <div class="cal-sidebar-card" id="calSummaryCard"></div>
+            <div class="cal-sidebar-card" id="calUpcomingCard"></div>
+            <div class="cal-sidebar-card" id="calDeparturesCard"></div>
+          </aside>
+        </div>
+
+      </div>
+
+      <!-- ══ CLIENTS ══ -->
+      <div id="panel-clients" style="display:none">
+        <div class="dash-toolbar">
+          <div class="dash-toolbar-left">
+            <input type="text" class="form-input" id="clientSearch" placeholder="Rechercher un client (nom, email)..." style="min-width:280px;font-size:0.85rem" oninput="filterClients()">
+          </div>
+          <div class="dash-toolbar-right">
+            <span id="clientCount" style="font-size:0.82rem;color:var(--text-muted)"></span>
+          </div>
+        </div>
+        <div class="chart-card" style="padding:0;overflow:hidden">
+          <div style="overflow-x:auto"><table class="data-table" id="clientsTable"></table></div>
+        </div>
+        <!-- Client detail modal (inline) -->
+        <div id="clientDetailPanel" style="display:none;margin-top:1.5rem">
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <h3 id="clientDetailName">Client</h3>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('clientDetailPanel').style.display='none'">Fermer</button>
+            </div>
+            <div id="clientDetailBody"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ INVOICES ══ -->
+      <div id="panel-invoices" style="display:none">
+        <div class="dash-toolbar">
+          <div class="dash-toolbar-left">
+            <input type="text" class="form-input" id="invoiceSearch" placeholder="Rechercher une facture..." style="min-width:220px;font-size:0.85rem" oninput="filterInvoices()">
+          </div>
+          <div class="dash-toolbar-right" style="flex-wrap:wrap;gap:0.5rem">
+            <select class="form-input" id="invoiceMonthFilter" style="width:auto;font-size:0.82rem" onchange="filterInvoices()">
+              <option value="">Tous les mois</option>
+              <option value="01">Janvier</option><option value="02">Fevrier</option><option value="03">Mars</option>
+              <option value="04">Avril</option><option value="05">Mai</option><option value="06">Juin</option>
+              <option value="07">Juillet</option><option value="08">Aout</option><option value="09">Septembre</option>
+              <option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Decembre</option>
+            </select>
+            <select class="form-input" id="invoiceYearFilter" style="width:auto;font-size:0.82rem" onchange="filterInvoices()">
+              <option value="">Toutes les annees</option>
+            </select>
+            <input type="date" class="form-input" id="invoiceDateFrom" style="width:auto;font-size:0.82rem" onchange="filterInvoices()" title="Date debut">
+            <input type="date" class="form-input" id="invoiceDateTo" style="width:auto;font-size:0.82rem" onchange="filterInvoices()" title="Date fin">
+            <button class="btn btn-ghost btn-sm" onclick="resetInvoiceFilters()" style="font-size:0.78rem">Reinitialiser</button>
+            <span id="invoiceCount" style="font-size:0.82rem;color:var(--text-muted)"></span>
+          </div>
+        </div>
+        <div id="invoiceTotalBar" style="padding:0.75rem 1.25rem;background:var(--sand);border-radius:var(--radius-md);margin-bottom:1rem;font-size:0.85rem;display:none"></div>
+        <div class="chart-card" style="padding:0;overflow:hidden">
+          <div style="overflow-x:auto"><table class="data-table" id="invoicesTable"></table></div>
+        </div>
+      </div>
+
+      <!-- ══ SEASONS ══ -->
+      <div id="panel-seasons" style="display:none">
+
+        <!-- Deposit config -->
+        <div class="chart-card" style="margin-bottom:1.5rem">
+          <div class="chart-card-header">
+            <h3>Systeme d'acompte</h3>
+          </div>
+          <div style="display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;cursor:pointer">
+              <input type="checkbox" id="depositEnabled" style="accent-color:var(--terra)" onchange="saveDepositFromUI()">
+              Activer le paiement par acompte
+            </label>
+            <div style="display:flex;align-items:center;gap:0.5rem">
+              <label style="font-size:0.82rem;color:var(--text-muted)">Pourcentage :</label>
+              <input type="number" class="form-input" id="depositPercent" min="10" max="90" step="5" value="30" style="width:70px;text-align:center;font-size:0.85rem" onchange="saveDepositFromUI()">
+              <span style="font-size:0.82rem;color:var(--text-muted)">%</span>
+            </div>
+          </div>
+          <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.75rem">Lorsqu'il est active, le client ne paie que le pourcentage indique lors de la reservation. Le solde est a regler avant l'arrivee.</p>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>Periodes saisonnieres</h3>
+            <button class="btn btn-primary btn-sm" onclick="addSeason()">+ Ajouter une saison</button>
+          </div>
+          <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1.25rem">Definissez les periodes saisonnieres (dates au format MM-JJ). Chaque propriete peut avoir un tarif specifique par saison. Le prix de base est utilise si aucun tarif saisonnier n'est defini.</p>
+          <div id="seasonsEditor"></div>
+        </div>
+        <div class="chart-card" style="margin-top:1.5rem">
+          <div class="chart-card-header">
+            <h3>Tarifs par propriete et par saison</h3>
+          </div>
+          <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1.25rem">Laissez vide pour utiliser le prix de base de la propriete.</p>
+          <div style="overflow-x:auto"><table class="data-table" id="seasonPricesTable"></table></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- ══ MODAL ADD / EDIT PROPERTY ══ -->
+<div class="modal-backdrop" id="propModal">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <div>
+        <span class="label" id="modalLabel">Nouvelle propriété</span>
+        <h3 style="margin-top:0.25rem" id="modalTitle">Ajouter une annonce</h3>
+      </div>
+      <button class="modal-close" onclick="closeModal('propModal')">✕</button>
+    </div>
+    <input type="hidden" id="editPropId">
+    <div class="modal-grid">
+      <div class="form-group">
+        <label class="form-label">Nom *</label>
+        <input type="text" class="form-input" id="fName" placeholder="Villa Soleil">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Type *</label>
+        <select class="form-input" id="fType">
+          <option value="Villa">Villa</option>
+          <option value="Appartement">Appartement</option>
+          <option value="Maison">Maison</option>
+          <option value="Finca">Finca</option>
+          <option value="Mas">Mas</option>
+          <option value="Penthouse">Penthouse</option>
+        </select>
+      </div>
+      <div class="form-group col-span-2">
+        <label class="form-label">Adresse / Localisation *</label>
+        <input type="text" class="form-input" id="fLocation" placeholder="Calle Mayor 12, Marbella, Espagne">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Région</label>
+        <select class="form-input" id="fRegion">
+          <option value="barcelone">Barcelone</option>
+          <option value="ibiza">Ibiza</option>
+          <option value="marbella">Marbella / Andalousie</option>
+          <option value="valence">Valence</option>
+          <option value="autre">Autre</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Badge / Étiquette</label>
+        <input type="text" class="form-input" id="fBadge" placeholder="Coup de cœur">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Prix / nuit (€) *</label>
+        <input type="number" class="form-input" id="fPrice" placeholder="350" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Capacité (personnes) *</label>
+        <input type="number" class="form-input" id="fGuests" placeholder="8" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Chambres</label>
+        <input type="number" class="form-input" id="fBeds" placeholder="4" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Salles de bain</label>
+        <input type="number" class="form-input" id="fBaths" placeholder="3" min="1">
+      </div>
+      <div class="form-group col-span-2">
+        <label class="form-label">Photos</label>
+        <div id="dropZone" class="drop-zone">
+          <span class="drop-icon">📸</span>
+          <p>Glissez vos images ici</p>
+          <p class="drop-hint">ou</p>
+          <label class="browse-label" for="fileInput">Parcourir les fichiers</label>
+          <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp" style="display:none">
+          <p class="drop-formats">JPG, PNG, WEBP — Max 5 Mo par image</p>
+        </div>
+        <div class="img-progress" id="imgProgress"><div class="img-progress-bar" id="imgProgressBar"></div></div>
+        <div class="img-error" id="imgError"></div>
+        <div class="img-preview-grid" id="imgPreviewGrid"></div>
+      </div>
+      <div class="form-group col-span-2">
+        <label class="form-label">Description</label>
+        <textarea class="form-input" id="fDesc" rows="3" placeholder="Décrivez la propriété…"></textarea>
+      </div>
+      <div class="form-group col-span-2">
+        <label class="form-label">Équipements <span style="font-weight:400;color:var(--text-muted)">(séparés par des virgules)</span></label>
+        <input type="text" class="form-input" id="fAmenities" placeholder="Piscine privée, WiFi, Climatisation, Parking">
+      </div>
+    </div>
+    <div style="display:flex;gap:0.75rem;margin-top:1.5rem;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal('propModal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveProp()">Enregistrer →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL EDIT RESERVATION STATUS ══ -->
+<div class="modal-backdrop" id="resModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div><span class="label">Réservation</span><h3 style="margin-top:0.25rem" id="resModalTitle">Modifier</h3></div>
+      <button class="modal-close" onclick="closeModal('resModal')">✕</button>
+    </div>
+    <input type="hidden" id="editResId">
+    <div class="form-group">
+      <label class="form-label">Statut</label>
+      <select class="form-input" id="fResStatus">
+        <option value="confirmed">Confirmée</option>
+        <option value="acompte">Acompte (solde restant)</option>
+        <option value="pending">En attente</option>
+        <option value="cancelled">Annulée</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Paiement reçu</label>
+      <select class="form-input" id="fResPaid">
+        <option value="true">Oui</option>
+        <option value="false">Non</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:0.75rem;margin-top:1.5rem;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal('resModal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveRes()">Enregistrer →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CALENDAR TOOLTIP ══ -->
+<div class="cal-tooltip" id="calTooltip"></div>
+
+<!-- ══ CALENDAR DETAIL MODAL ══ -->
+<div class="modal-backdrop" id="calDetailModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header" style="padding-bottom:0.75rem">
+      <div style="flex:1" id="calDetailHeader"></div>
+      <button class="modal-close" onclick="closeModal('calDetailModal')">✕</button>
+    </div>
+    <div id="calDetailBody"></div>
+    <div style="display:flex;gap:0.75rem;margin-top:1.25rem;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal('calDetailModal')">Fermer</button>
+      <button class="btn btn-primary" id="calDetailEditBtn">✏️ Modifier le statut</button>
+    </div>
+  </div>
+</div>
+
+<!-- auth.js already loaded in <head> — no duplicate needed -->
+<script src="js/app.js"></script>
+<script src="js/data.js"></script>
+<!-- MODE DÉMO : backend simulé côté navigateur (clients + factures sans PHP). Retirer cette ligne pour réactiver le vrai backend PHP. -->
+<script src="js/demo-api.js"></script>
+<script>
+/* ── TAB NAVIGATION ── */
+const TABS = ['stats','props','res','calendar','clients','invoices','seasons'];
+const TITLES = { stats:'Tableau de bord', props:'Propriétés', res:'Réservations', calendar:'Calendrier', clients:'Clients', invoices:'Factures', seasons:'Tarifs saisonniers' };
+
+/* ── Admin API token (sent as header on every protected request) ── */
+const ADMIN_TOKEN = 'solara_admin_token_changeme';
+
+function adminFetch(url, options) {
+  options = options || {};
+  options.headers = options.headers || {};
+  options.headers['X-Admin-Token'] = ADMIN_TOKEN;
+  return fetch(url, options);
+}
+
+function downloadPdf(invoiceId) {
+  adminFetch('api/invoices.php?download=' + invoiceId)
+    .then(r => {
+      if (!r.ok) throw new Error('Erreur ' + r.status);
+      return r.blob();
+    })
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'facture-' + invoiceId + '.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    })
+    .catch(() => showToast('Erreur lors du telechargement du PDF', 'error'));
+}
+
+function switchTab(tab) {
+  TABS.forEach(t => {
+    document.getElementById('panel-'+t).style.display = t===tab ? 'block' : 'none';
+    const nav = document.getElementById('nav-'+t);
+    if (nav) nav.classList.toggle('active', t===tab);
+  });
+  document.getElementById('topbarTitle').textContent = TITLES[tab];
+  if (tab==='props')    renderProps();
+  if (tab==='res')      renderResTable(RESERVATIONS);
+  if (tab==='calendar') renderCalendar();
+  if (tab==='stats')    renderStats();
+  if (tab==='clients')  loadClients();
+  if (tab==='invoices') loadInvoices();
+  if (tab==='seasons')  renderSeasonsPanel();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DASHBOARD ENGINE — Period-aware, real data, simple + advanced
+   ═══════════════════════════════════════════════════════════════════ */
+
+let dashPeriod = 'month';
+let dashAdvancedOn = false;
+let dashCustomFrom = null, dashCustomTo = null;
+
+/* ── Period helpers ── */
+function getPeriodRange(period, refDate) {
+  const d = refDate || new Date();
+  const today = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  let from, to;
+  switch (period) {
+    case 'day':
+      from = new Date(today); to = new Date(today);
+      to.setDate(to.getDate() + 1);
+      break;
+    case 'week':
+      from = new Date(today);
+      const dow = from.getDay() === 0 ? 6 : from.getDay() - 1;
+      from.setDate(from.getDate() - dow);
+      to = new Date(from); to.setDate(to.getDate() + 7);
+      break;
+    case 'month':
+      from = new Date(d.getFullYear(), d.getMonth(), 1);
+      to = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      break;
+    case 'year':
+      from = new Date(d.getFullYear(), 0, 1);
+      to = new Date(d.getFullYear() + 1, 0, 1);
+      break;
+    case 'custom':
+      from = dashCustomFrom ? new Date(dashCustomFrom) : new Date(d.getFullYear(), d.getMonth(), 1);
+      to = dashCustomTo ? new Date(dashCustomTo) : new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      to.setDate(to.getDate() + 1); /* inclusive end */
+      break;
+    default:
+      from = new Date(d.getFullYear(), d.getMonth(), 1);
+      to = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  }
+  return { from, to };
+}
+
+function getPreviousPeriodRange(period, refDate) {
+  const d = refDate || new Date();
+  switch (period) {
+    case 'day':
+      const prev = new Date(d); prev.setDate(prev.getDate() - 1);
+      return getPeriodRange('day', prev);
+    case 'week':
+      const pw = new Date(d); pw.setDate(pw.getDate() - 7);
+      return getPeriodRange('week', pw);
+    case 'month':
+      const pm = new Date(d); pm.setMonth(pm.getMonth() - 1);
+      return getPeriodRange('month', pm);
+    case 'year':
+      const py = new Date(d); py.setFullYear(py.getFullYear() - 1);
+      return getPeriodRange('year', py);
+    case 'custom':
+      const cur = getPeriodRange('custom');
+      const duration = cur.to.getTime() - cur.from.getTime();
+      const prevFrom = new Date(cur.from.getTime() - duration);
+      const prevTo = new Date(cur.from);
+      return { from: prevFrom, to: prevTo };
+    default: return getPeriodRange(period, d);
+  }
+}
+
+function formatPeriodLabel(period) {
+  const r = getPeriodRange(period);
+  const fmt = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const fmtShort = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  switch (period) {
+    case 'day':   return "Aujourd'hui — " + fmt(r.from);
+    case 'week':  return 'Semaine du ' + fmtShort(r.from) + ' au ' + fmtShort(new Date(r.to.getTime() - 86400000));
+    case 'month': return r.from.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    case 'year':  return 'Année ' + r.from.getFullYear();
+    case 'custom': return fmtShort(r.from) + ' → ' + fmtShort(new Date(r.to.getTime() - 86400000));
+    default: return '';
+  }
+}
+
+/* ── Filter reservations by date range ── */
+function filterResByRange(range) {
+  return RESERVATIONS.filter(function(r) {
+    if (!r.checkin) return false;
+    const ci = new Date(r.checkin);
+    const co = r.checkout ? new Date(r.checkout) : ci;
+    /* Reservation overlaps with range if it starts before range end AND ends after range start */
+    return ci < range.to && co > range.from;
+  });
+}
+
+/* ── Compute metrics for a set of reservations ── */
+function computeMetrics(reservations, range) {
+  const confirmed = reservations.filter(r => r.status === 'confirmed');
+  const acompte   = reservations.filter(r => r.status === 'acompte');
+  const pending   = reservations.filter(r => r.status === 'pending');
+  const cancelled = reservations.filter(r => r.status === 'cancelled');
+  /* Include acompte in active bookings for revenue and occupancy */
+  const active    = confirmed.concat(acompte);
+  const revenue   = active.reduce((s, r) => s + (Number(r.total) || 0), 0);
+  const totalNights = active.reduce((s, r) => s + (Number(r.nights) || 0), 0);
+
+  /* Occupation rate: booked days / (total available days * properties) */
+  const rangeDays = Math.max(1, Math.round((range.to - range.from) / 86400000));
+  const propCount = Math.max(1, PROPERTIES.length);
+  const totalSlots = rangeDays * propCount;
+
+  let bookedSlots = 0;
+  active.forEach(function(r) {
+    if (!r.checkin || !r.checkout) return;
+    const ci = new Date(r.checkin);
+    const co = new Date(r.checkout);
+    const effStart = ci < range.from ? range.from : ci;
+    const effEnd = co > range.to ? range.to : co;
+    const days = Math.max(0, Math.round((effEnd - effStart) / 86400000));
+    bookedSlots += days;
+  });
+  const occupancy = Math.min(100, Math.round((bookedSlots / totalSlots) * 100));
+
+  const avgNightly = totalNights > 0 ? Math.round(revenue / totalNights) : 0;
+  const avgStay = active.length > 0 ? (totalNights / active.length).toFixed(1) : 0;
+
+  return {
+    revenue, confirmed: confirmed.length, acompte: acompte.length, pending: pending.length,
+    cancelled: cancelled.length, total: reservations.length,
+    occupancy, bookedSlots, totalSlots, rangeDays,
+    totalNights, avgNightly, avgStay
+  };
+}
+
+/* ── Period selector UI ── */
+function setPeriod(period, btn) {
+  dashPeriod = period;
+  document.querySelectorAll('.period-chip').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  const customEl = document.getElementById('periodCustom');
+  if (period === 'custom') {
+    customEl.classList.add('visible');
+    if (!dashCustomFrom) {
+      const now = new Date();
+      document.getElementById('periodFrom').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
+      document.getElementById('periodTo').value = now.toISOString().split('T')[0];
+    }
+  } else {
+    customEl.classList.remove('visible');
+  }
+  renderStats();
+}
+
+function applyCustomPeriod() {
+  dashCustomFrom = document.getElementById('periodFrom').value;
+  dashCustomTo = document.getElementById('periodTo').value;
+  if (dashCustomFrom && dashCustomTo) renderStats();
+}
+
+function toggleAdvanced() {
+  dashAdvancedOn = !dashAdvancedOn;
+  document.getElementById('dashToggle').classList.toggle('active', dashAdvancedOn);
+  document.getElementById('dashAdvanced').classList.toggle('visible', dashAdvancedOn);
+  if (dashAdvancedOn) renderAdvancedDashboard();
+}
+
+/* ═══ RENDER STATS — main entry point ═══ */
+function renderStats() {
+  const range = getPeriodRange(dashPeriod);
+  const res = filterResByRange(range);
+  const m = computeMetrics(res, range);
+
+  /* Period label */
+  document.getElementById('dashPeriodLabel').textContent = 'Période : ' + formatPeriodLabel(dashPeriod);
+  document.getElementById('topbarPropCount').textContent = PROPERTIES.length;
+
+  /* ═══ SIMPLE KPIs ═══ */
+  document.getElementById('dashSimpleKpi').innerHTML = `
+    <div class="dash-kpi-big revenue">
+      <div class="kpi-big-icon" style="background:rgba(196,113,74,0.1)">💶</div>
+      <div class="kpi-big-val">€${m.revenue.toLocaleString('fr-FR')}</div>
+      <div class="kpi-big-label">Revenu généré</div>
+      <div class="kpi-big-sub">
+        <strong>${m.confirmed}</strong> réservation${m.confirmed>1?'s':''} confirmée${m.confirmed>1?'s':''} · <strong>${m.totalNights}</strong> nuitée${m.totalNights>1?'s':''}
+      </div>
+    </div>
+    <div class="dash-kpi-big occupation">
+      <div class="kpi-big-icon" style="background:rgba(42,100,120,0.1)">📊</div>
+      <div class="kpi-big-val">${m.occupancy}%</div>
+      <div class="kpi-big-label">Taux d'occupation</div>
+      <div class="kpi-big-sub">
+        <strong>${m.bookedSlots}</strong> nuit${m.bookedSlots>1?'s':''} occupée${m.bookedSlots>1?'s':''} sur <strong>${m.totalSlots}</strong> disponible${m.totalSlots>1?'s':''}
+      </div>
+    </div>
+    <div class="dash-kpi-big bookings">
+      <div class="kpi-big-icon" style="background:rgba(74,124,89,0.1)">📋</div>
+      <div class="kpi-big-val">${m.total}</div>
+      <div class="kpi-big-label">Réservations totales</div>
+      <div class="kpi-big-sub">
+        <strong style="color:#4A7B5C">${m.confirmed}</strong> confirmée${m.confirmed>1?'s':''}
+        ${m.pending ? ' · <strong style="color:#C49A4A">'+m.pending+'</strong> en attente' : ''}
+        ${m.cancelled ? ' · <strong style="color:#B04A4A">'+m.cancelled+'</strong> annulée'+( m.cancelled>1?'s':'') : ''}
+      </div>
+    </div>`;
+
+  /* ═══ REVENUE CHART ═══ */
+  renderRevenueChart(range);
+
+  /* ═══ OCCUPATION GAUGE ═══ */
+  setTimeout(function() {
+    drawGauge('occGauge', m.occupancy);
+    document.getElementById('occGaugeVal').textContent = m.occupancy + '%';
+    document.getElementById('occDetails').innerHTML =
+      '<strong>' + m.bookedSlots + '</strong> nuit' + (m.bookedSlots>1?'s':'') + ' réservée' + (m.bookedSlots>1?'s':'') +
+      ' sur <strong>' + m.totalSlots + '</strong> disponible' + (m.totalSlots>1?'s':'') +
+      '<br><span style="font-size:0.75rem;color:var(--text-muted)">' + PROPERTIES.length + ' propriété' + (PROPERTIES.length>1?'s':'') + ' × ' + m.rangeDays + ' jours</span>';
+  }, 50);
+
+  /* ═══ RECENT RESERVATIONS ═══ */
+  const recent = res.sort(function(a,b) { return (b.checkin||'').localeCompare(a.checkin||''); }).slice(0, 5);
+  document.getElementById('recentResTable').innerHTML = resTableHTML(recent);
+
+  /* ═══ ADVANCED (if active) ═══ */
+  if (dashAdvancedOn) renderAdvancedDashboard();
+}
+
+/* ── Revenue chart: breaks data into sub-periods ── */
+function renderRevenueChart(range) {
+  const days = Math.round((range.to - range.from) / 86400000);
+  let labels = [], values = [], buckets;
+
+  if (days <= 1) {
+    /* Hourly for single day */
+    labels = ['0h','4h','8h','12h','16h','20h','24h'];
+    buckets = new Array(7).fill(0);
+    RESERVATIONS.filter(r => r.status === 'confirmed' || r.status === 'acompte').forEach(function(r) {
+      const ci = new Date(r.checkin);
+      if (ci >= range.from && ci < range.to) {
+        buckets[0] += Number(r.total) || 0;
+      }
+    });
+    values = buckets;
+  } else if (days <= 14) {
+    /* Daily */
+    for (let d = new Date(range.from); d < range.to; d.setDate(d.getDate()+1)) {
+      labels.push(d.getDate() + '/' + (d.getMonth()+1));
+      const dayStart = new Date(d), dayEnd = new Date(d);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+      let rev = 0;
+      RESERVATIONS.filter(r => r.status === 'confirmed' || r.status === 'acompte').forEach(function(r) {
+        const ci = new Date(r.checkin);
+        if (ci >= dayStart && ci < dayEnd) rev += Number(r.total) || 0;
+      });
+      values.push(rev);
+    }
+  } else if (days <= 90) {
+    /* Weekly */
+    let weekStart = new Date(range.from);
+    while (weekStart < range.to) {
+      const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 7);
+      const effEnd = weekEnd > range.to ? range.to : weekEnd;
+      labels.push('S' + Math.ceil((weekStart.getDate()) / 7));
+      let rev = 0;
+      RESERVATIONS.filter(r => r.status === 'confirmed' || r.status === 'acompte').forEach(function(r) {
+        const ci = new Date(r.checkin);
+        if (ci >= weekStart && ci < effEnd) rev += Number(r.total) || 0;
+      });
+      values.push(rev);
+      weekStart = weekEnd;
+    }
+  } else {
+    /* Monthly */
+    const startMonth = range.from.getMonth() + range.from.getFullYear() * 12;
+    const endMonth = range.to.getMonth() + range.to.getFullYear() * 12;
+    const monthNames = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    for (let m = startMonth; m <= endMonth; m++) {
+      const yr = Math.floor(m / 12), mo = m % 12;
+      labels.push(monthNames[mo]);
+      const mStart = new Date(yr, mo, 1), mEnd = new Date(yr, mo + 1, 1);
+      let rev = 0;
+      RESERVATIONS.filter(r => r.status === 'confirmed' || r.status === 'acompte').forEach(function(r) {
+        const ci = new Date(r.checkin);
+        if (ci >= mStart && ci < mEnd) rev += Number(r.total) || 0;
+      });
+      values.push(rev);
+    }
+  }
+
+  const title = document.getElementById('simpleChartTitle');
+  if (title) title.textContent = 'Revenus sur la période';
+
+  setTimeout(function() {
+    drawBarChart('revenueChart', labels, values, '#C4714A');
+  }, 60);
+}
+
+/* ── Gauge drawing ── */
+function drawGauge(canvasId, pct) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var w = canvas.width, h = canvas.height;
+  var cx = w / 2, cy = h / 2, r = w / 2 - 8;
+  ctx.clearRect(0, 0, w, h);
+
+  /* Background track */
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = '#EDE3D6';
+  ctx.stroke();
+
+  /* Value arc */
+  ctx.beginPath();
+  var startAngle = -Math.PI / 2;
+  var endAngle = startAngle + (Math.PI * 2 * pct / 100);
+  ctx.arc(cx, cy, r, startAngle, endAngle);
+  ctx.lineWidth = 10;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#2A6478';
+  ctx.stroke();
+}
+
+/* ═══ ADVANCED DASHBOARD ═══ */
+function renderAdvancedDashboard() {
+  const range = getPeriodRange(dashPeriod);
+  const prevRange = getPreviousPeriodRange(dashPeriod);
+  const curRes = filterResByRange(range);
+  const prevRes = filterResByRange(prevRange);
+  const curM = computeMetrics(curRes, range);
+  const prevM = computeMetrics(prevRes, prevRange);
+
+  /* ── Period comparison ── */
+  function deltaHTML(cur, prev, suffix, isInverse) {
+    if (prev === 0 && cur === 0) return '<span class="adv-compare-delta neutral">—</span>';
+    if (prev === 0) return '<span class="adv-compare-delta up">nouveau</span>';
+    const pct = Math.round(((cur - prev) / prev) * 100);
+    const isUp = pct >= 0;
+    const cls = isInverse ? (isUp ? 'down' : 'up') : (isUp ? 'up' : 'down');
+    if (pct === 0) return '<span class="adv-compare-delta neutral">= 0%</span>';
+    return '<span class="adv-compare-delta ' + cls + '">' + (isUp ? '▲' : '▼') + ' ' + Math.abs(pct) + '%</span>';
+  }
+
+  var compareHTML = '';
+  var rows = [
+    { label: 'Revenus', cur: '€' + curM.revenue.toLocaleString('fr-FR'), prev: '€' + prevM.revenue.toLocaleString('fr-FR'), delta: deltaHTML(curM.revenue, prevM.revenue) },
+    { label: 'Taux d\'occupation', cur: curM.occupancy + '%', prev: prevM.occupancy + '%', delta: deltaHTML(curM.occupancy, prevM.occupancy) },
+    { label: 'Réservations', cur: String(curM.confirmed), prev: String(prevM.confirmed), delta: deltaHTML(curM.confirmed, prevM.confirmed) },
+    { label: 'Nuitées vendues', cur: String(curM.totalNights), prev: String(prevM.totalNights), delta: deltaHTML(curM.totalNights, prevM.totalNights) },
+    { label: 'Prix moyen / nuit', cur: '€' + curM.avgNightly, prev: '€' + prevM.avgNightly, delta: deltaHTML(curM.avgNightly, prevM.avgNightly) },
+    { label: 'Annulations', cur: String(curM.cancelled), prev: String(prevM.cancelled), delta: deltaHTML(curM.cancelled, prevM.cancelled, '', true) },
+  ];
+  rows.forEach(function(row) {
+    compareHTML += '<div class="adv-compare-row">' +
+      '<span class="adv-compare-label">' + row.label + '</span>' +
+      '<div class="adv-compare-vals">' +
+        '<span class="adv-compare-prev">' + row.prev + '</span>' +
+        '<span class="adv-compare-cur">' + row.cur + '</span>' +
+        row.delta +
+      '</div></div>';
+  });
+  document.getElementById('advCompareRows').innerHTML = compareHTML;
+
+  /* ── Status donut ── */
+  setTimeout(function() {
+    var segments = [];
+    if (curM.confirmed > 0) segments.push({ value: curM.confirmed, color: '#4A7B5C' });
+    if (curM.pending > 0)   segments.push({ value: curM.pending, color: '#C49A4A' });
+    if (curM.cancelled > 0) segments.push({ value: curM.cancelled, color: '#B04A4A' });
+    if (segments.length === 0) segments.push({ value: 1, color: '#EDE3D6' });
+    drawDonut('advStatusDonut', segments);
+
+    document.getElementById('advStatusLegend').innerHTML =
+      '<div style="text-align:center"><div style="font-family:var(--font-display);font-size:1.3rem;color:#4A7B5C">' + curM.confirmed + '</div><div style="font-size:0.72rem;color:var(--text-muted)">Confirmées</div></div>' +
+      '<div style="text-align:center"><div style="font-family:var(--font-display);font-size:1.3rem;color:#C49A4A">' + curM.pending + '</div><div style="font-size:0.72rem;color:var(--text-muted)">En attente</div></div>' +
+      '<div style="text-align:center"><div style="font-family:var(--font-display);font-size:1.3rem;color:#B04A4A">' + curM.cancelled + '</div><div style="font-size:0.72rem;color:var(--text-muted)">Annulées</div></div>';
+  }, 80);
+
+  /* ── 12-month trend ── */
+  setTimeout(function() {
+    var labels = [], vals = [];
+    var now = new Date();
+    var monthNames = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    for (var i = 11; i >= 0; i--) {
+      var mDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      var mEnd  = new Date(mDate.getFullYear(), mDate.getMonth() + 1, 1);
+      labels.push(monthNames[mDate.getMonth()] + (mDate.getFullYear() !== now.getFullYear() ? ' ' + mDate.getFullYear() : ''));
+      var rev = 0;
+      RESERVATIONS.filter(r => r.status === 'confirmed' || r.status === 'acompte').forEach(function(r) {
+        var ci = new Date(r.checkin);
+        if (ci >= mDate && ci < mEnd) rev += Number(r.total) || 0;
+      });
+      vals.push(rev);
+    }
+    drawLineChart('advTrendChart', labels, [{ values: vals, color: '#2A6478' }]);
+  }, 100);
+
+  /* ── Performance per property ── */
+  var perfHTML = '<thead><tr><th>Propriété</th><th>Réservations</th><th>Nuitées</th><th>Revenu</th><th>Occupation</th><th>Prix moy./nuit</th></tr></thead><tbody>';
+  PROPERTIES.forEach(function(p) {
+    var propRes = curRes.filter(r => (r.property === p.name || r.propId === p.id) && (r.status === 'confirmed' || r.status === 'acompte'));
+    var propRev = propRes.reduce((s, r) => s + (Number(r.total) || 0), 0);
+    var propNights = propRes.reduce((s, r) => s + (Number(r.nights) || 0), 0);
+    var propOcc = Math.min(100, Math.round((propNights / Math.max(1, curM.rangeDays)) * 100));
+    var propAvg = propNights > 0 ? Math.round(propRev / propNights) : 0;
+    var barColor = propOcc >= 70 ? '#4A7B5C' : propOcc >= 40 ? '#C49A4A' : '#B04A4A';
+
+    perfHTML += '<tr>' +
+      '<td><strong>' + p.name + '</strong><div style="font-size:0.72rem;color:var(--text-muted)">' + p.location + '</div></td>' +
+      '<td>' + propRes.length + '</td>' +
+      '<td>' + propNights + '</td>' +
+      '<td><strong>€' + propRev.toLocaleString('fr-FR') + '</strong></td>' +
+      '<td><div style="display:flex;align-items:center;gap:0.5rem">' +
+        '<div class="perf-bar-track"><div class="perf-bar-fill" style="width:' + propOcc + '%;background:' + barColor + '"></div></div>' +
+        '<span style="font-size:0.78rem;font-weight:600;color:' + barColor + '">' + propOcc + '%</span>' +
+      '</div></td>' +
+      '<td>€' + propAvg + '</td>' +
+    '</tr>';
+  });
+  perfHTML += '</tbody>';
+  if (!PROPERTIES.length) perfHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">Aucune propriété</td></tr>';
+  document.getElementById('advPerfTable').innerHTML = perfHTML;
+
+  /* ── Revenue per property bar chart ── */
+  setTimeout(function() {
+    var propLabels = [], propVals = [];
+    PROPERTIES.forEach(function(p) {
+      var propRes = curRes.filter(r => (r.property === p.name || r.propId === p.id) && (r.status === 'confirmed' || r.status === 'acompte'));
+      propLabels.push(p.name.split(' ').slice(0, 2).join(' '));
+      propVals.push(propRes.reduce((s, r) => s + (Number(r.total) || 0), 0));
+    });
+    drawBarChart('advPropRevenueChart', propLabels, propVals, '#2A6478');
+  }, 120);
+
+  /* ── Advanced key metrics ── */
+  var convRate = curM.total > 0 ? Math.round((curM.confirmed / curM.total) * 100) : 0;
+  var cancelRate = curM.total > 0 ? Math.round((curM.cancelled / curM.total) * 100) : 0;
+  var revPerProp = PROPERTIES.length > 0 ? Math.round(curM.revenue / PROPERTIES.length) : 0;
+  var revPerDay = curM.rangeDays > 0 ? Math.round(curM.revenue / curM.rangeDays) : 0;
+
+  document.getElementById('advKeyMetrics').innerHTML =
+    metricRow('Taux de conversion', convRate + '%', convRate >= 70 ? 'up' : convRate >= 40 ? 'neutral' : 'down', 'Confirmées / total des réservations') +
+    metricRow('Taux d\'annulation', cancelRate + '%', cancelRate <= 10 ? 'up' : cancelRate <= 25 ? 'neutral' : 'down', 'Annulées / total des réservations') +
+    metricRow('Revenu / propriété', '€' + revPerProp.toLocaleString('fr-FR'), '', 'Moyenne sur ' + PROPERTIES.length + ' propriété' + (PROPERTIES.length>1?'s':'')) +
+    metricRow('Revenu / jour', '€' + revPerDay.toLocaleString('fr-FR'), '', 'Sur ' + curM.rangeDays + ' jours') +
+    metricRow('Durée moy. du séjour', curM.avgStay + ' nuits', '', 'Basé sur ' + curM.confirmed + ' réservation' + (curM.confirmed>1?'s':'')) +
+    metricRow('Prix moy. / nuit', '€' + curM.avgNightly, '', 'Toutes propriétés confondues');
+}
+
+function metricRow(label, value, trend, sub) {
+  var trendHTML = '';
+  if (trend === 'up') trendHTML = '<span class="trend-badge up">bon</span>';
+  else if (trend === 'down') trendHTML = '<span class="trend-badge down">attention</span>';
+  else if (trend === 'neutral') trendHTML = '<span class="trend-badge neutral">moyen</span>';
+
+  return '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem 0;border-bottom:1px solid var(--beige-mid)">' +
+    '<div><div style="font-size:0.85rem;color:var(--charcoal);font-weight:500">' + label + '</div>' +
+    '<div style="font-size:0.72rem;color:var(--text-muted)">' + (sub || '') + '</div></div>' +
+    '<div style="display:flex;align-items:center;gap:0.6rem">' +
+      '<span style="font-family:var(--font-display);font-size:1.15rem;color:var(--charcoal)">' + value + '</span>' +
+      trendHTML +
+    '</div></div>';
+}
+
+/* ── PROPERTIES PANEL ── */
+function renderProps() {
+  document.getElementById('propCount').textContent = PROPERTIES.length;
+  document.getElementById('topbarPropCount').textContent = PROPERTIES.length;
+  const grid = document.getElementById('propMgmtGrid');
+  if (!PROPERTIES.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="ei">🏚</div><p>Aucune propriété. Ajoutez-en une !</p></div>`;
+    return;
+  }
+  grid.innerHTML = PROPERTIES.map(p => `
+    <div class="prop-mgmt-card">
+      <img class="prop-mgmt-img" src="${p.img}" alt="${p.name}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400&q=60'">
+      <div class="prop-mgmt-body">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-weight:500;font-size:0.9rem">${p.name}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">📍 ${p.location}</div>
+          </div>
+          <span class="badge badge-terra" style="flex-shrink:0">€${p.price}/nuit</span>
+        </div>
+        <div style="display:flex;gap:0.75rem;margin-top:0.4rem">
+          <span style="font-size:0.72rem;color:var(--text-muted)">🛏 ${p.beds}</span>
+          <span style="font-size:0.72rem;color:var(--text-muted)">👥 ${p.guests}</span>
+          <span style="font-size:0.72rem;color:var(--text-muted)">📌 ${p.type}</span>
+          <span style="font-size:0.72rem;color:var(--text-muted)">★ ${p.rating}</span>
+        </div>
+        <div class="prop-mgmt-actions">
+          <button class="btn btn-ghost btn-sm" onclick="openEditModal(${p.id})">✏️ Modifier</button>
+          <button class="btn btn-ocean btn-sm" onclick="window.open('property.html?id=${p.id}','_blank')">👁 Voir</button>
+          <button class="btn-danger" onclick="confirmDelete(${p.id})">🗑 Supprimer</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+/* ── DELETE WITH CONFIRM ── */
+function confirmDelete(id) {
+  const p = getProperty(id);
+  if (!p) return;
+  if (!confirm(`Supprimer "${p.name}" ? Cette action est irréversible.`)) return;
+  deleteProperty(id);
+  renderProps();
+  renderStats();
+  showToast('Propriété supprimée', 'error');
+}
+
+/* ══ IMAGE UPLOAD SYSTEM ══ */
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 Mo
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const COMPRESS_MAX_W = 1200;
+const COMPRESS_QUALITY = 0.75;
+var modalImages = []; // Array of data-URL strings
+
+function compressImage(file) {
+  return new Promise(function(resolve, reject) {
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      return reject('Format non supporté : ' + file.name + '. Utilisez JPG, PNG ou WEBP.');
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return reject(file.name + ' est trop lourd (' + (file.size / 1024 / 1024).toFixed(1) + ' Mo). Max 5 Mo.');
+    }
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onload = function() {
+        var w = img.width, h = img.height;
+        if (w > COMPRESS_MAX_W) { h = Math.round(h * COMPRESS_MAX_W / w); w = COMPRESS_MAX_W; }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', COMPRESS_QUALITY));
+      };
+      img.onerror = function() { reject('Impossible de lire ' + file.name); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function() { reject('Erreur de lecture : ' + file.name); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function showImgError(msg) {
+  var el = document.getElementById('imgError');
+  el.textContent = msg; el.classList.add('visible');
+  setTimeout(function() { el.classList.remove('visible'); }, 4000);
+}
+
+async function handleFiles(files) {
+  var errEl = document.getElementById('imgError');
+  errEl.classList.remove('visible');
+  var progress = document.getElementById('imgProgress');
+  var bar = document.getElementById('imgProgressBar');
+  progress.classList.add('active'); bar.style.width = '0%';
+
+  var total = files.length, done = 0;
+  for (var i = 0; i < files.length; i++) {
+    try {
+      var dataUrl = await compressImage(files[i]);
+      modalImages.push(dataUrl);
+      done++;
+      bar.style.width = Math.round((done / total) * 100) + '%';
+    } catch (err) {
+      showImgError(err);
+    }
+  }
+  setTimeout(function() { progress.classList.remove('active'); }, 500);
+  renderImgPreviews();
+}
+
+function renderImgPreviews() {
+  var grid = document.getElementById('imgPreviewGrid');
+  if (!modalImages.length) { grid.innerHTML = ''; return; }
+  grid.innerHTML = modalImages.map(function(src, i) {
+    return '<div class="img-preview-item" draggable="true" data-idx="' + i + '">' +
+      '<img src="' + src + '" alt="Photo ' + (i + 1) + '">' +
+      '<button class="remove-img" onclick="removeImg(' + i + ')" title="Supprimer">✕</button>' +
+      (i === 0 ? '<span class="main-label">Principal</span>' : '') +
+      '</div>';
+  }).join('');
+  initDragReorder();
+}
+
+function removeImg(idx) {
+  modalImages.splice(idx, 1);
+  renderImgPreviews();
+}
+
+/* ── Drag & drop reorder ── */
+var dragSrcIdx = null;
+function initDragReorder() {
+  var items = document.querySelectorAll('.img-preview-item');
+  items.forEach(function(item) {
+    item.addEventListener('dragstart', function(e) {
+      dragSrcIdx = parseInt(this.dataset.idx);
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', function() { this.classList.remove('dragging'); });
+    item.addEventListener('dragover', function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+    item.addEventListener('drop', function(e) {
+      e.preventDefault();
+      var targetIdx = parseInt(this.dataset.idx);
+      if (dragSrcIdx !== null && dragSrcIdx !== targetIdx) {
+        var moved = modalImages.splice(dragSrcIdx, 1)[0];
+        modalImages.splice(targetIdx, 0, moved);
+        renderImgPreviews();
+      }
+      dragSrcIdx = null;
+    });
+  });
+}
+
+/* ── Drop zone events ── */
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var dz = document.getElementById('dropZone');
+    var fi = document.getElementById('fileInput');
+    if (!dz || !fi) return;
+    ['dragenter','dragover'].forEach(function(ev) {
+      dz.addEventListener(ev, function(e) { e.preventDefault(); dz.classList.add('dragover'); });
+    });
+    ['dragleave','drop'].forEach(function(ev) {
+      dz.addEventListener(ev, function(e) { e.preventDefault(); dz.classList.remove('dragover'); });
+    });
+    dz.addEventListener('drop', function(e) { if (e.dataTransfer.files.length) handleFiles(Array.from(e.dataTransfer.files)); });
+    dz.addEventListener('click', function(e) { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'LABEL') fi.click(); });
+    fi.addEventListener('change', function() { if (fi.files.length) { handleFiles(Array.from(fi.files)); fi.value = ''; } });
+  });
+})();
+
+/* ── ADD / EDIT MODAL ── */
+function openAddModal() {
+  document.getElementById('modalLabel').textContent = 'Nouvelle propriété';
+  document.getElementById('modalTitle').textContent = 'Ajouter une annonce';
+  document.getElementById('editPropId').value = '';
+  ['fName','fLocation','fBadge','fDesc','fAmenities'].forEach(function(id) { document.getElementById(id).value=''; });
+  document.getElementById('fType').value = 'Villa';
+  document.getElementById('fRegion').value = 'marbella';
+  document.getElementById('fPrice').value = '';
+  document.getElementById('fGuests').value = '';
+  document.getElementById('fBeds').value = '';
+  document.getElementById('fBaths').value = '';
+  modalImages = [];
+  renderImgPreviews();
+  openModal('propModal');
+}
+
+function openEditModal(id) {
+  const p = getProperty(id);
+  if (!p) return;
+  document.getElementById('modalLabel').textContent = 'Modifier la propriété';
+  document.getElementById('modalTitle').textContent = p.name;
+  document.getElementById('editPropId').value = p.id;
+  document.getElementById('fName').value      = p.name;
+  document.getElementById('fType').value      = p.type;
+  document.getElementById('fLocation').value  = p.location;
+  document.getElementById('fRegion').value    = p.region;
+  document.getElementById('fBadge').value     = p.badge;
+  document.getElementById('fPrice').value     = p.price;
+  document.getElementById('fGuests').value    = p.guests;
+  document.getElementById('fBeds').value      = p.beds;
+  document.getElementById('fBaths').value     = p.baths;
+  document.getElementById('fDesc').value      = p.description;
+  document.getElementById('fAmenities').value = (p.amenities||[]).join(', ');
+  modalImages = (p.imgs && p.imgs.length) ? p.imgs.slice() : (p.img ? [p.img] : []);
+  renderImgPreviews();
+  openModal('propModal');
+}
+
+function saveProp() {
+  const name = document.getElementById('fName').value.trim();
+  const location = document.getElementById('fLocation').value.trim();
+  const price = document.getElementById('fPrice').value;
+  if (!name || !location || !price) { showToast('Nom, adresse et prix sont obligatoires','error'); return; }
+
+  const fallback = 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80';
+  const mainImg = modalImages.length ? modalImages[0] : fallback;
+
+  const data = {
+    name, location, price,
+    type:        document.getElementById('fType').value,
+    region:      document.getElementById('fRegion').value,
+    badge:       document.getElementById('fBadge').value.trim() || 'Nouveau',
+    guests:      document.getElementById('fGuests').value || 2,
+    beds:        document.getElementById('fBeds').value || 1,
+    baths:       document.getElementById('fBaths').value || 1,
+    img:         mainImg,
+    imgs:        modalImages.length ? modalImages.slice() : [fallback],
+    description: document.getElementById('fDesc').value.trim(),
+    amenities:   document.getElementById('fAmenities').value,
+  };
+
+  const editId = parseInt(document.getElementById('editPropId').value);
+  if (editId) {
+    updateProperty(editId, data);
+    showToast('Propriété mise à jour ✓', 'success');
+  } else {
+    addProperty(data);
+    showToast('Propriété ajoutée ✓', 'success');
+  }
+
+  closeModal('propModal');
+  renderProps();
+  renderStats();
+}
+
+/* ── RESERVATIONS TABLE ── */
+function resTableHTML(data) {
+  if (!data.length) return '<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted)">Aucune réservation</td></tr>';
+  return `<thead><tr>
+    <th>Réf.</th><th>Client</th><th>Propriété</th><th>Arrivée</th><th>Départ</th><th>Nuits</th><th>Total</th><th>Message conciergerie</th><th>Statut</th><th>Actions</th>
+  </tr></thead><tbody>${data.map(r=>`
+    <tr>
+      <td><code style="font-size:0.75rem;color:var(--terra)">${r.id}</code></td>
+      <td><strong>${r.guest}</strong></td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.property}</td>
+      <td>${r.checkin}</td><td>${r.checkout}</td><td>${r.nights}</td>
+      <td><strong>€${Number(r.total).toLocaleString('fr-FR')}</strong>${r.status==='acompte'&&r.amountPaid?'<br><small style="color:#2A6478;font-weight:400">Acompte: €'+r.amountPaid+' · Solde: €'+r.remainingAmount+'</small>':''}</td>
+      <td style="max-width:180px;font-size:0.78rem;color:var(--charcoal-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.message||'').replace(/"/g,'&quot;')}">${r.message||'<span style="color:var(--text-muted)">—</span>'}</td>
+      <td><span class="status-pill status-${r.status}">${r.status==='confirmed'?'✓ Confirmée':r.status==='acompte'?'◐ Acompte':r.status==='pending'?'⏳ En attente':'✗ Annulée'}</span></td>
+      <td><div style="display:flex;gap:0.3rem">
+        <button class="btn btn-ghost btn-sm" title="Modifier" onclick="openResModal('${r.id}')">✏️</button>
+        <button class="btn-danger" title="Supprimer" onclick="confirmDeleteRes('${r.id}')">🗑</button>
+      </div></td>
+    </tr>`).join('')}
+  </tbody>`;
+}
+
+let _resFilter = 'all';
+function filterRes(btn, f) {
+  document.querySelectorAll('#panel-res .filter-chip').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); _resFilter = f;
+  const filtered = f==='all' ? RESERVATIONS : RESERVATIONS.filter(r=>r.status===f);
+  document.getElementById('fullResTable').innerHTML = resTableHTML(filtered);
+}
+function searchRes(q) {
+  const filtered = RESERVATIONS.filter(r=>
+    r.guest.toLowerCase().includes(q.toLowerCase()) ||
+    r.property.toLowerCase().includes(q.toLowerCase()) ||
+    r.id.toLowerCase().includes(q.toLowerCase())
+  );
+  document.getElementById('fullResTable').innerHTML = resTableHTML(filtered);
+}
+function renderResTable(data) {
+  document.getElementById('fullResTable').innerHTML = resTableHTML(data);
+}
+
+function openResModal(id) {
+  const r = RESERVATIONS.find(x=>x.id===id);
+  if (!r) return;
+  document.getElementById('editResId').value = r.id;
+  document.getElementById('resModalTitle').textContent = r.guest + ' — ' + r.property;
+  document.getElementById('fResStatus').value = r.status;
+  document.getElementById('fResPaid').value = String(r.paid);
+  openModal('resModal');
+}
+function saveRes() {
+  const id = document.getElementById('editResId').value;
+  const status = document.getElementById('fResStatus').value;
+  const paid = document.getElementById('fResPaid').value === 'true';
+  updateReservation(id, { status, paid });
+  closeModal('resModal');
+  renderResTable(RESERVATIONS);
+  showToast('Réservation mise à jour ✓', 'success');
+}
+function confirmDeleteRes(id) {
+  const r = RESERVATIONS.find(x=>x.id===id);
+  if (!r || !confirm(`Supprimer la réservation de ${r.guest} ?`)) return;
+  deleteReservation(id);
+  renderResTable(RESERVATIONS);
+  showToast('Réservation supprimée', 'error');
+}
+
+/* ═══════════════════════════════════════════
+   CALENDAR v2 — Visual Planning Board
+   ═══════════════════════════════════════════ */
+
+let calYear = new Date().getFullYear(), calMonth = new Date().getMonth();
+let calFilterProp = '';
+let calFilterStatus = 'all';
+
+const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
+/* ── Per-property color palette ── */
+const CAL_COLORS = [
+  { solid:'#C4714A', bg:'rgba(196,113,74,0.88)', text:'#fff' },
+  { solid:'#2A6478', bg:'rgba(42,100,120,0.88)',  text:'#fff' },
+  { solid:'#7B6FAD', bg:'rgba(123,111,173,0.88)', text:'#fff' },
+  { solid:'#4A7B5C', bg:'rgba(74,123,92,0.88)',   text:'#fff' },
+  { solid:'#C49A4A', bg:'rgba(196,154,74,0.88)',  text:'#fff' },
+  { solid:'#9B4A6F', bg:'rgba(155,74,111,0.88)',  text:'#fff' },
+  { solid:'#4A7B9B', bg:'rgba(74,123,155,0.88)',  text:'#fff' },
+];
+
+function getPropColor(propName) {
+  let hash = 0;
+  for (let i = 0; i < propName.length; i++) hash = (hash * 31 + propName.charCodeAt(i)) % 1e6;
+  return CAL_COLORS[Math.abs(hash) % CAL_COLORS.length];
+}
+
+function getStatusIcon(s) { return s==='confirmed'?'✓':s==='acompte'?'◐':s==='pending'?'⏳':'✕'; }
+function getStatusLabel(s) { return s==='confirmed'?'Confirmée':s==='acompte'?'Acompte':s==='pending'?'En attente':'Annulée'; }
+function getStatusColor(s) { return s==='confirmed'?'#4A7B5C':s==='acompte'?'#2A6478':s==='pending'?'#C49A4A':'#B04A4A'; }
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' });
+}
+
+/* ── Navigation ── */
+function calNav(d) {
+  calMonth += d;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0)  { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function calGoToday() {
+  const n = new Date(); calYear = n.getFullYear(); calMonth = n.getMonth();
+  renderCalendar();
+}
+
+function calSetStatus(btn, status) {
+  document.querySelectorAll('#panel-calendar .cal-status-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  calFilterStatus = status;
+  renderCalendar();
+}
+
+/* ── Populate property filter dropdown ── */
+function updateCalPropFilter() {
+  const sel = document.getElementById('calPropFilter');
+  if (!sel) return;
+  const props = [...new Set(RESERVATIONS.map(r => r.property))].sort();
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">🏠 Toutes les propriétés</option>' +
+    props.map(p => `<option value="${p}" ${p===cur?'selected':''}>${p}</option>`).join('');
+}
+
+/* ── Legend ── */
+function renderCalLegend(reservations) {
+  const legend = document.getElementById('calLegend');
+  if (!legend) return;
+  const props = [...new Set(reservations.map(r => r.property))].sort();
+  legend.innerHTML = props.map(p => {
+    const c = getPropColor(p);
+    return `<span class="cal-legend-item" title="Filtrer par ${p}" onclick="document.getElementById('calPropFilter').value='${p}';calFilterProp='${p}';renderCalendar()">
+      <span class="cal-legend-dot" style="background:${c.solid}"></span>
+      ${p.split(' ').slice(0,2).join(' ')}
+    </span>`;
+  }).join('');
+}
+
+/* ── Main render ── */
+function renderCalendar() {
+  /* Title */
+  document.getElementById('calTitle').textContent = MONTHS[calMonth] + ' ' + calYear;
+
+  updateCalPropFilter();
+
+  /* Filter */
+  let reservations = RESERVATIONS.slice();
+  if (calFilterProp) reservations = reservations.filter(r => r.property === calFilterProp);
+  if (calFilterStatus !== 'all') reservations = reservations.filter(r => r.status === calFilterStatus);
+
+  renderCalLegend(reservations);
+
+  /* Calendar geometry */
+  const today = new Date();
+  const firstDow = new Date(calYear, calMonth, 1).getDay(); // 0=Sun..6=Sat
+  const offset = firstDow === 0 ? 6 : firstDow - 1;         // shift to Mon-first
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+
+  /* Which days have bookings (for free-day indicator) */
+  const bookedDaySet = new Set();
+  reservations.filter(r => r.status !== 'cancelled').forEach(r => {
+    const ci = new Date(r.checkin), co = new Date(r.checkout);
+    for (let d = new Date(ci); d < co; d.setDate(d.getDate() + 1)) {
+      if (d.getFullYear() === calYear && d.getMonth() === calMonth) bookedDaySet.add(d.getDate());
+    }
+  });
+
+  /* Render day cells */
+  const daysGrid = document.getElementById('calDaysGrid');
+  let html = '';
+  for (let i = 0; i < offset; i++) html += '<div class="cal-day-cell other-month"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isToday  = calYear === today.getFullYear() && calMonth === today.getMonth() && d === today.getDate();
+    const idx      = offset + d - 1;
+    const col      = idx % 7; // 0=Mon .. 6=Sun
+    const isWkend  = col >= 5;
+    const isBooked = bookedDaySet.has(d);
+    const isFree   = !isBooked;
+    html += `<div class="cal-day-cell${isToday?' today':''}${isWkend?' weekend':''}${isFree?' free-day':''}" id="cal-cell-${d}" data-day="${d}">
+      <span class="cal-day-num">${d}</span>
+    </div>`;
+  }
+  daysGrid.innerHTML = html;
+
+  /* Render events after paint */
+  requestAnimationFrame(() => renderCalEventBlocks(reservations, offset, daysInMonth));
+
+  /* Sidebar */
+  renderCalSidebar(reservations, daysInMonth, bookedDaySet);
+}
+
+/* ── Event blocks (absolute-positioned spans) ── */
+function renderCalEventBlocks(reservations, offset, daysInMonth) {
+  const outer   = document.getElementById('calOuter');
+  const layer   = document.getElementById('calEventsLayer');
+  const cell1   = document.getElementById('cal-cell-1');
+  const header  = document.getElementById('calDaynames');
+  if (!outer || !layer || !cell1 || !header) return;
+
+  const cellW  = cell1.offsetWidth;
+  const cellH  = cell1.offsetHeight;
+  const hdrH   = header.offsetHeight;
+  const DAY_NUM_H = 27;   /* space reserved for day number */
+  const EV_H      = 20;   /* event block height */
+  const EV_GAP    = 3;    /* gap between stacked events */
+  const EV_PAD_H  = 2;    /* horizontal padding within cell */
+  const MAX_SLOTS = Math.floor((cellH - DAY_NUM_H) / (EV_H + EV_GAP));
+
+  /* Lane allocator: weekRow → slot → [{startCol, endCol}] */
+  const lanes = {};
+  function allocLane(weekRow, startCol, endCol) {
+    if (!lanes[weekRow]) lanes[weekRow] = [];
+    const wl = lanes[weekRow];
+    for (let slot = 0; slot < MAX_SLOTS + 5; slot++) {
+      const occupied = wl[slot] || [];
+      if (!occupied.some(e => e.sc <= endCol && e.ec >= startCol)) {
+        if (!wl[slot]) wl[slot] = [];
+        wl[slot].push({ sc: startCol, ec: endCol });
+        return slot;
+      }
+    }
+    return MAX_SLOTS; /* overflow slot */
+  }
+
+  /* Overflow counters per day */
+  const overflowCount = {};
+
+  const sorted = [...reservations].sort((a, b) => a.checkin.localeCompare(b.checkin));
+
+  const monthStart    = new Date(calYear, calMonth, 1);
+  const nextMonthStart = new Date(calYear, calMonth + 1, 1);
+
+  let evHtml = '';
+
+  sorted.forEach(r => {
+    const color = getPropColor(r.property);
+    const ci    = new Date(r.checkin);
+    const co    = new Date(r.checkout);
+
+    /* Clamp to current month */
+    const effStart = ci < monthStart ? monthStart : ci;
+    const effEnd   = co > nextMonthStart ? nextMonthStart : co;
+    if (effStart >= nextMonthStart || effEnd <= monthStart) return;
+
+    const startD = effStart.getDate();
+    const endD   = effEnd.getDate();   /* exclusive */
+
+    /* Determine visual classes based on real (un-clamped) start/end */
+    const trueStart = ci.getTime() === effStart.getTime();
+    const trueEnd   = co.getTime() === effEnd.getTime();
+
+    /* Split into per-week-row segments */
+    let segD = startD;
+    while (segD < endD) {
+      const segIdx    = offset + segD - 1;
+      const segRow    = Math.floor(segIdx / 7);
+      const segStartC = segIdx % 7;
+
+      /* Last day of this segment: end of reservation OR end of week */
+      const weekLastD = segD + (6 - segStartC);
+      const segLastD  = Math.min(endD - 1, weekLastD);
+
+      const segEndC = (offset + segLastD - 1) % 7;
+
+      const isSegStart = segD === startD;
+      const isSegEnd   = segLastD === endD - 1;
+
+      /* Allocate a lane */
+      const slot = allocLane(segRow, segStartC, segEndC);
+      const isOverflow = slot >= MAX_SLOTS;
+
+      if (isOverflow) {
+        /* Mark overflow days */
+        for (let d = segD; d <= segLastD; d++) {
+          overflowCount[d] = (overflowCount[d] || 0) + 1;
+        }
+        segD = segLastD + 1;
+        continue;
+      }
+
+      /* Pixel geometry */
+      const top  = hdrH + segRow * cellH + DAY_NUM_H + slot * (EV_H + EV_GAP);
+      const left = segStartC * cellW + EV_PAD_H;
+      const wid  = (segEndC - segStartC + 1) * cellW - EV_PAD_H * 2;
+
+      /* Border-radius for visual "spanning" effect */
+      const rTL = (isSegStart && (trueStart || segD === startD)) ? '4px' : '0';
+      const rTR = (isSegEnd && (trueEnd || segLastD === endD - 1)) ? '4px' : '0';
+      const rBR = rTR, rBL = rTL;
+
+      /* Label: only on segment start */
+      const shortName = r.property.split(' ').slice(0, 2).join(' ');
+      const label = isSegStart
+        ? `<span style="display:flex;align-items:center;gap:3px;overflow:hidden;text-overflow:ellipsis">
+             <span style="opacity:0.75">${getStatusIcon(r.status)}</span>
+             <span>${shortName}</span>
+           </span>`
+        : '';
+
+      const bgColor = r.status === 'cancelled'
+        ? 'rgba(120,120,120,0.45)'
+        : color.bg;
+
+      evHtml += `<div
+        class="cal-event-block${r.status==='pending'?' pending':''}${r.status==='cancelled'?' cancelled':''}"
+        style="top:${top}px;left:${left}px;width:${wid}px;background:${bgColor};color:${color.text};border-radius:${rTL} ${rTR} ${rBR} ${rBL};z-index:${10+slot};"
+        data-res="${r.id}"
+        onmouseenter="showCalTooltip(event,'${r.id}')"
+        onmouseleave="hideCalTooltip()"
+        onclick="openCalDetail('${r.id}')"
+      >${label}</div>`;
+
+      segD = segLastD + 1;
+    }
+  });
+
+  layer.innerHTML = evHtml;
+
+  /* Inject overflow badges into day cells */
+  Object.entries(overflowCount).forEach(([d, count]) => {
+    const cell = document.getElementById('cal-cell-' + d);
+    if (cell) cell.insertAdjacentHTML('beforeend', `<div class="cal-overflow-badge">+${count}</div>`);
+  });
+}
+
+/* ── Tooltip ── */
+function showCalTooltip(e, resId) {
+  const r = RESERVATIONS.find(x => x.id === resId);
+  if (!r) return;
+  const c = getPropColor(r.property);
+  const tip = document.getElementById('calTooltip');
+  tip.innerHTML = `
+    <div class="cal-tooltip-title">
+      <span class="cal-tooltip-prop-dot" style="background:${c.solid}"></span>
+      ${r.guest}
+    </div>
+    <div class="cal-tooltip-row">🏠 ${r.property}</div>
+    <div class="cal-tooltip-row">📅 ${fmtDate(r.checkin)} → ${fmtDate(r.checkout)}</div>
+    <div class="cal-tooltip-row">🌙 ${r.nights} nuit${r.nights>1?'s':''}</div>
+    <div class="cal-tooltip-row">💶 <strong style="color:white">€${Number(r.total).toLocaleString('fr-FR')}</strong></div>
+    <div class="cal-tooltip-row" style="color:${getStatusColor(r.status)}">${getStatusIcon(r.status)} ${getStatusLabel(r.status)}${r.paid?' · ✅ Payé':' · ⏳ En attente paiement'}</div>
+    <div class="cal-tooltip-hint">Cliquer pour le détail →</div>`;
+  const margin = 14;
+  let x = e.clientX + margin, y = e.clientY + margin;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  tip.classList.add('visible');
+  requestAnimationFrame(() => {
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    if (x + tw > window.innerWidth - margin)  x = e.clientX - tw - margin;
+    if (y + th > window.innerHeight - margin) y = e.clientY - th - margin;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  });
+}
+function hideCalTooltip() { document.getElementById('calTooltip').classList.remove('visible'); }
+
+/* ── Detail modal ── */
+function openCalDetail(resId) {
+  hideCalTooltip();
+  const r = RESERVATIONS.find(x => x.id === resId);
+  if (!r) return;
+  const c = getPropColor(r.property);
+  document.getElementById('calDetailHeader').innerHTML = `
+    <div class="cal-detail-header" style="background:${c.bg};margin:-1rem -1rem 0;border-radius:var(--radius-md) var(--radius-md) 0 0;">
+      <span class="cal-detail-prop-dot" style="background:white;opacity:0.7"></span>
+      <div>
+        <div style="font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;opacity:0.7;color:white">Réservation ${r.id}</div>
+        <div style="font-family:var(--font-display);font-size:1.3rem;color:white;font-weight:400">${r.guest}</div>
+      </div>
+      <span style="margin-left:auto;background:rgba(255,255,255,0.2);color:white;padding:0.25rem 0.7rem;border-radius:999px;font-size:0.73rem;font-weight:600">${getStatusIcon(r.status)} ${getStatusLabel(r.status)}</span>
+    </div>`;
+  document.getElementById('calDetailBody').innerHTML = `
+    <div class="cal-detail-grid">
+      <div class="cal-detail-item span-2">
+        <label>Propriété</label>
+        <span>🏠 ${r.property}</span>
+      </div>
+      <div class="cal-detail-item">
+        <label>Arrivée</label>
+        <span>📅 ${fmtDate(r.checkin)}</span>
+      </div>
+      <div class="cal-detail-item">
+        <label>Départ</label>
+        <span>📅 ${fmtDate(r.checkout)}</span>
+      </div>
+      <div class="cal-detail-item">
+        <label>Durée</label>
+        <span>🌙 ${r.nights} nuit${r.nights>1?'s':''}</span>
+      </div>
+      <div class="cal-detail-item">
+        <label>Total</label>
+        <span style="color:var(--terra);font-family:var(--font-display);font-size:1.1rem">€${Number(r.total).toLocaleString('fr-FR')}</span>
+      </div>
+      <div class="cal-detail-item">
+        <label>Paiement</label>
+        <span>${r.status === 'acompte' ? '◐ Acompte €' + (r.amountPaid || '—') : r.paid ? '✅ Reçu' : '⏳ En attente'}</span>
+      </div>
+      <div class="cal-detail-item">
+        <label>Statut</label>
+        <span style="color:${getStatusColor(r.status)};font-weight:600">${getStatusIcon(r.status)} ${getStatusLabel(r.status)}</span>
+      </div>
+      ${r.status === 'acompte' && r.remainingAmount ? `<div class="cal-detail-item span-2">
+        <label>Solde restant</label>
+        <span style="color:var(--danger);font-weight:600">€${Number(r.remainingAmount).toLocaleString('fr-FR')} à percevoir</span>
+      </div>` : ''}
+    </div>`;
+  document.getElementById('calDetailEditBtn').onclick = () => { closeModal('calDetailModal'); openResModal(r.id); };
+  openModal('calDetailModal');
+}
+
+/* ── Sidebar ── */
+function renderCalSidebar(reservations, daysInMonth, bookedDaySet) {
+  /* Summary card */
+  const active = reservations.filter(r => r.status !== 'cancelled');
+  const confirmedCount = reservations.filter(r => r.status === 'confirmed').length;
+  const acompteCount   = reservations.filter(r => r.status === 'acompte').length;
+  const pendingCount   = reservations.filter(r => r.status === 'pending').length;
+  const bookedDays     = bookedDaySet ? bookedDaySet.size : 0;
+  const revenue        = reservations.filter(r => r.status === 'confirmed' || r.status === 'acompte').reduce((s,r) => s+r.total, 0);
+
+  const summCard = document.getElementById('calSummaryCard');
+  if (summCard) summCard.innerHTML = `
+    <div class="cal-sidebar-title">📊 Résumé du mois</div>
+    <div class="cal-summary-grid">
+      <div class="cal-summary-item">
+        <div class="cal-summary-num" style="color:var(--terra)">${active.length}</div>
+        <div class="cal-summary-label">Réservations</div>
+      </div>
+      <div class="cal-summary-item">
+        <div class="cal-summary-num" style="color:var(--ocean)">${daysInMonth ? Math.round(bookedDays/daysInMonth*100) : 0}%</div>
+        <div class="cal-summary-label">Occupation</div>
+      </div>
+      <div class="cal-summary-item">
+        <div class="cal-summary-num" style="color:#4A7B5C">${confirmedCount}</div>
+        <div class="cal-summary-label">Confirmées</div>
+      </div>
+      <div class="cal-summary-item">
+        <div class="cal-summary-num" style="color:#2A6478">${acompteCount}</div>
+        <div class="cal-summary-label">Acompte</div>
+      </div>
+      <div class="cal-summary-item">
+        <div class="cal-summary-num" style="color:#C49A4A">${pendingCount}</div>
+        <div class="cal-summary-label">En attente</div>
+      </div>
+    </div>
+    ${revenue ? `<div style="margin-top:0.85rem;padding:0.6rem 0.85rem;background:rgba(196,113,74,0.06);border-radius:var(--radius-sm);border-left:3px solid var(--terra)">
+      <div style="font-size:0.65rem;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase">Revenus confirmés</div>
+      <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--terra)">€${revenue.toLocaleString('fr-FR')}</div>
+    </div>` : ''}`;
+
+  /* Upcoming arrivals */
+  const now = new Date();
+  const upcoming = reservations
+    .filter(r => r.status !== 'cancelled' && new Date(r.checkin) >= now)
+    .sort((a, b) => a.checkin.localeCompare(b.checkin))
+    .slice(0, 5);
+
+  const upCard = document.getElementById('calUpcomingCard');
+  if (upCard) upCard.innerHTML = `
+    <div class="cal-sidebar-title">✈️ Prochaines arrivées</div>
+    ${upcoming.length ? upcoming.map((r, i) => {
+      const c = getPropColor(r.property);
+      return `<div class="cal-arrival-item" style="animation-delay:${i*60}ms">
+        <span class="cal-arrival-dot" style="background:${c.solid}"></span>
+        <div style="flex:1;min-width:0">
+          <div class="cal-arrival-name">${r.guest}</div>
+          <div class="cal-arrival-prop">${r.property.split(' ').slice(0,3).join(' ')}</div>
+          <div class="cal-arrival-date">→ ${fmtDate(r.checkin)} · ${r.nights}n</div>
+        </div>
+        <span class="cal-arrival-amount">€${Number(r.total).toLocaleString('fr-FR')}</span>
+      </div>`;
+    }).join('') : '<p style="font-size:0.82rem;color:var(--text-muted)">Aucune arrivée prévue.</p>'}`;
+
+  /* Upcoming departures */
+  const departures = reservations
+    .filter(r => r.status !== 'cancelled' && new Date(r.checkout) >= now)
+    .sort((a, b) => a.checkout.localeCompare(b.checkout))
+    .slice(0, 4);
+
+  const depCard = document.getElementById('calDeparturesCard');
+  if (depCard) depCard.innerHTML = `
+    <div class="cal-sidebar-title">🛫 Prochains départs</div>
+    ${departures.length ? departures.map((r, i) => {
+      const c = getPropColor(r.property);
+      return `<div class="cal-arrival-item" style="animation-delay:${i*60}ms">
+        <span class="cal-arrival-dot" style="background:${c.solid};opacity:0.5"></span>
+        <div style="flex:1;min-width:0">
+          <div class="cal-arrival-name">${r.guest}</div>
+          <div class="cal-arrival-prop">${r.property.split(' ').slice(0,3).join(' ')}</div>
+          <div class="cal-arrival-date" style="color:var(--terra)">← ${fmtDate(r.checkout)}</div>
+        </div>
+      </div>`;
+    }).join('') : '<p style="font-size:0.82rem;color:var(--text-muted)">Aucun départ prévu.</p>'}`;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CLIENTS PANEL
+   ══════════════════════════════════════════════════════════════ */
+
+let _clientsCache = [];
+
+function loadClients() {
+  adminFetch('api/clients.php')
+    .then(r => r.json())
+    .then(data => {
+      if (!Array.isArray(data)) { _clientsCache = []; renderClientsTable([]); return; }
+      _clientsCache = data;
+      renderClientsTable(data);
+    })
+    .catch(() => {
+      document.getElementById('clientsTable').innerHTML = '<tr><td style="padding:2rem;text-align:center;color:var(--text-muted)">Impossible de charger les clients. Verifiez que MySQL est actif.</td></tr>';
+    });
+}
+
+function renderClientsTable(clients) {
+  const el = document.getElementById('clientsTable');
+  document.getElementById('clientCount').textContent = clients.length + ' client' + (clients.length > 1 ? 's' : '');
+  if (!clients.length) {
+    el.innerHTML = '<tr><td style="padding:2rem;text-align:center;color:var(--text-muted)">Aucun client enregistre</td></tr>';
+    return;
+  }
+  el.innerHTML = '<thead><tr><th>Client</th><th>Email</th><th>Telephone</th><th>Reservations</th><th>Total depense</th><th>Inscrit le</th><th></th></tr></thead><tbody>'
+    + clients.map(c => {
+      const name = (c.first_name + ' ' + c.last_name).trim() || 'N/A';
+      const spent = (parseInt(c.total_spent_cents || 0) / 100).toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
+      const date = c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : '-';
+      return '<tr>'
+        + '<td><strong>' + escH(name) + '</strong></td>'
+        + '<td>' + escH(c.email) + '</td>'
+        + '<td>' + escH(c.phone || '-') + '</td>'
+        + '<td style="text-align:center">' + (c.confirmed_reservations || 0) + ' / ' + (c.total_reservations || 0) + '</td>'
+        + '<td style="text-align:right">' + spent + '</td>'
+        + '<td>' + date + '</td>'
+        + '<td style="white-space:nowrap">'
+        +   '<button class="btn btn-ghost btn-sm" onclick="viewClient(' + c.id + ')">Voir</button> '
+        +   '<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteClient(' + c.id + ',\'' + escH(name).replace(/'/g,'\\\'') + '\')">Supprimer</button>'
+        + '</td>'
+        + '</tr>';
+    }).join('')
+    + '</tbody>';
+}
+
+function filterClients() {
+  const q = document.getElementById('clientSearch').value.toLowerCase().trim();
+  if (!q) { renderClientsTable(_clientsCache); return; }
+  renderClientsTable(_clientsCache.filter(c =>
+    ((c.first_name || '') + ' ' + (c.last_name || '')).toLowerCase().includes(q)
+    || (c.email || '').toLowerCase().includes(q)
+    || (c.phone || '').toLowerCase().includes(q)
+  ));
+}
+
+function deleteClient(id, name) {
+  if (!confirm('Supprimer le client "' + name + '" ?\n\nToutes ses reservations et factures seront egalement supprimees. Cette action est irreversible.')) return;
+  adminFetch('api/clients.php?id=' + id, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.deleted) {
+        showToast('Client supprime', 'success');
+        document.getElementById('clientDetailPanel').style.display = 'none';
+        loadClients();
+      } else {
+        showToast(data.error || 'Erreur', 'error');
+      }
+    })
+    .catch(() => showToast('Erreur reseau', 'error'));
+}
+
+function viewClient(id) {
+  adminFetch('api/clients.php?id=' + id)
+    .then(r => r.json())
+    .then(c => {
+      const panel = document.getElementById('clientDetailPanel');
+      const name = (c.first_name + ' ' + c.last_name).trim() || 'Client #' + c.id;
+      document.getElementById('clientDetailName').textContent = name;
+
+      let html = '';
+
+      /* ── Client info card with edit form ── */
+      html += '<div style="background:var(--sand);border-radius:var(--radius-md);padding:1.25rem;margin-bottom:1.5rem">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">';
+      html += '<h4 style="font-size:0.9rem;color:var(--ocean);margin:0">Informations du client</h4>';
+      html += '<div style="display:flex;gap:0.5rem">';
+      html += '<button class="btn btn-ghost btn-sm" id="clientEditBtn" onclick="toggleClientEdit(' + c.id + ')">Modifier</button>';
+      html += '<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteClient(' + c.id + ',\'' + escH(name).replace(/'/g,'\\\'') + '\')">Supprimer</button>';
+      html += '</div></div>';
+
+      /* Read-only view */
+      html += '<div id="clientInfoView">';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">';
+      html += '<div><span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);display:block;margin-bottom:0.2rem">Prenom</span><strong>' + escH(c.first_name || '-') + '</strong></div>';
+      html += '<div><span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);display:block;margin-bottom:0.2rem">Nom</span><strong>' + escH(c.last_name || '-') + '</strong></div>';
+      html += '<div><span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);display:block;margin-bottom:0.2rem">Inscrit le</span><strong>' + formatDt(c.created_at) + '</strong></div>';
+      html += '<div><span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);display:block;margin-bottom:0.2rem">Email</span><strong>' + escH(c.email) + '</strong></div>';
+      html += '<div><span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);display:block;margin-bottom:0.2rem">Telephone</span><strong>' + escH(c.phone || '-') + '</strong></div>';
+      html += '<div><span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);display:block;margin-bottom:0.2rem">Derniere mise a jour</span><strong>' + formatDt(c.updated_at) + '</strong></div>';
+      html += '</div></div>';
+
+      /* Edit form (hidden by default) */
+      html += '<div id="clientEditForm" style="display:none">';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">';
+      html += '<div><label class="form-label" style="font-size:0.75rem">Prenom (non modifiable)</label><input class="form-input" value="' + escAttr(c.first_name || '') + '" disabled style="opacity:0.5"></div>';
+      html += '<div><label class="form-label" style="font-size:0.75rem">Nom (non modifiable)</label><input class="form-input" value="' + escAttr(c.last_name || '') + '" disabled style="opacity:0.5"></div>';
+      html += '<div><label class="form-label" style="font-size:0.75rem">Email</label><input class="form-input" id="editClientEmail" value="' + escAttr(c.email) + '"></div>';
+      html += '<div><label class="form-label" style="font-size:0.75rem">Telephone</label><input class="form-input" id="editClientPhone" value="' + escAttr(c.phone || '') + '" placeholder="+33 6 12 34 56 78"></div>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:0.75rem;margin-top:1rem;justify-content:flex-end">';
+      html += '<button class="btn btn-ghost btn-sm" onclick="toggleClientEdit()">Annuler</button>';
+      html += '<button class="btn btn-primary btn-sm" onclick="saveClientEdit(' + c.id + ')">Enregistrer</button>';
+      html += '</div></div>';
+
+      html += '</div>';
+
+      /* ── Reservations + Invoices grid ── */
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">';
+
+      /* Reservations */
+      html += '<div><h4 style="margin-bottom:0.75rem;font-size:0.9rem;color:var(--ocean)">Historique des reservations (' + (c.reservations ? c.reservations.length : 0) + ')</h4>';
+      if (c.reservations && c.reservations.length) {
+        html += '<table class="data-table" style="font-size:0.8rem"><thead><tr><th>Ref</th><th>Propriete</th><th>Dates</th><th>Montant</th><th>Statut</th></tr></thead><tbody>';
+        c.reservations.forEach(r => {
+          const amt = (r.amount_cents / 100).toLocaleString('fr-FR', {style:'currency', currency: r.currency || 'EUR'});
+          const statusClass = r.status === 'confirmed' ? 'color:#4A7B5C' : r.status === 'acompte' ? 'color:#2A6478' : r.status === 'cancelled' ? 'color:#B04A4A' : 'color:#C49A4A';
+          html += '<tr><td>' + escH(r.reference) + '</td><td>' + escH(r.property_name) + '</td>'
+            + '<td>' + formatDt(r.checkin_date) + ' &rarr; ' + formatDt(r.checkout_date) + '</td>'
+            + '<td style="text-align:right">' + amt + '</td>'
+            + '<td style="' + statusClass + ';font-weight:600;text-transform:capitalize">' + r.status + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      } else { html += '<p style="color:var(--text-muted);font-size:0.82rem">Aucune reservation</p>'; }
+      html += '</div>';
+
+      /* Invoices */
+      html += '<div><h4 style="margin-bottom:0.75rem;font-size:0.9rem;color:var(--ocean)">Factures (' + (c.invoices ? c.invoices.length : 0) + ')</h4>';
+      if (c.invoices && c.invoices.length) {
+        html += '<table class="data-table" style="font-size:0.8rem"><thead><tr><th>N° Facture</th><th>Montant</th><th>Date</th><th></th></tr></thead><tbody>';
+        c.invoices.forEach(inv => {
+          const amt = (inv.amount_cents / 100).toLocaleString('fr-FR', {style:'currency', currency: inv.currency || 'EUR'});
+          html += '<tr><td><strong>' + escH(inv.invoice_number) + '</strong></td>'
+            + '<td style="text-align:right">' + amt + '</td>'
+            + '<td>' + formatDt(inv.created_at) + '</td>'
+            + '<td style="white-space:nowrap"><button class="btn btn-primary btn-sm" style="font-size:0.72rem" onclick="downloadPdf(' + inv.id + ')">PDF</button> '
+            + '<button class="btn btn-ghost btn-sm" style="font-size:0.72rem;color:var(--danger)" onclick="deleteInvoice(' + inv.id + ',\'' + escH(inv.invoice_number).replace(/'/g,'\\\'') + '\',' + c.id + ')">Suppr.</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      } else { html += '<p style="color:var(--text-muted);font-size:0.82rem">Aucune facture</p>'; }
+      html += '</div></div>';
+
+      document.getElementById('clientDetailBody').innerHTML = html;
+      panel.style.display = 'block';
+      panel.scrollIntoView({ behavior: 'smooth' });
+    });
+}
+
+function toggleClientEdit(id) {
+  const view = document.getElementById('clientInfoView');
+  const form = document.getElementById('clientEditForm');
+  const btn  = document.getElementById('clientEditBtn');
+  if (form.style.display === 'none') {
+    view.style.display = 'none';
+    form.style.display = 'block';
+    btn.style.display = 'none';
+  } else {
+    view.style.display = 'block';
+    form.style.display = 'none';
+    btn.style.display = '';
+  }
+}
+
+function saveClientEdit(id) {
+  const email = document.getElementById('editClientEmail').value.trim();
+  const phone = document.getElementById('editClientPhone').value.trim();
+
+  adminFetch('api/clients.php?id=' + id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, phone })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.updated) {
+      showToast('Client mis a jour', 'success');
+      viewClient(id);
+      loadClients();
+    } else {
+      showToast(data.error || 'Erreur', 'error');
+    }
+  })
+  .catch(() => showToast('Erreur reseau', 'error'));
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INVOICES PANEL
+   ══════════════════════════════════════════════════════════════ */
+
+let _invoicesCache = [];
+
+function loadInvoices() {
+  adminFetch('api/invoices.php')
+    .then(r => r.json())
+    .then(data => {
+      if (!Array.isArray(data)) { _invoicesCache = []; renderInvoicesTable([]); return; }
+      _invoicesCache = data;
+      /* Populate year filter dynamically */
+      const years = [...new Set(data.map(inv => (inv.created_at||'').slice(0,4)).filter(Boolean))].sort().reverse();
+      const ySel = document.getElementById('invoiceYearFilter');
+      const curVal = ySel.value;
+      ySel.innerHTML = '<option value="">Toutes les annees</option>' + years.map(y => '<option value="' + y + '"' + (y===curVal?' selected':'') + '>' + y + '</option>').join('');
+      filterInvoices();
+    })
+    .catch(() => {
+      document.getElementById('invoicesTable').innerHTML = '<tr><td style="padding:2rem;text-align:center;color:var(--text-muted)">Impossible de charger les factures. Verifiez que MySQL est actif.</td></tr>';
+    });
+}
+
+function renderInvoicesTable(invoices) {
+  const el = document.getElementById('invoicesTable');
+  document.getElementById('invoiceCount').textContent = invoices.length + ' facture' + (invoices.length > 1 ? 's' : '');
+  if (!invoices.length) {
+    el.innerHTML = '<tr><td style="padding:2rem;text-align:center;color:var(--text-muted)">Aucune facture generee</td></tr>';
+    return;
+  }
+  el.innerHTML = '<thead><tr><th>N° Facture</th><th>Client</th><th>Propriete</th><th>Dates</th><th>Montant</th><th>Date emission</th><th></th></tr></thead><tbody>'
+    + invoices.map(inv => {
+      const name = ((inv.first_name || '') + ' ' + (inv.last_name || '')).trim() || inv.email;
+      const amt = (inv.amount_cents / 100).toLocaleString('fr-FR', {style:'currency', currency: inv.currency || 'EUR'});
+      return '<tr>'
+        + '<td><strong>' + escH(inv.invoice_number) + '</strong></td>'
+        + '<td>' + escH(name) + '</td>'
+        + '<td>' + escH(inv.property_name || '') + '</td>'
+        + '<td>' + formatDt(inv.checkin_date) + ' &rarr; ' + formatDt(inv.checkout_date) + '</td>'
+        + '<td style="text-align:right;font-weight:600">' + amt + '</td>'
+        + '<td>' + formatDt(inv.created_at) + '</td>'
+        + '<td style="white-space:nowrap">'
+        +   '<button class="btn btn-primary btn-sm" style="font-size:0.72rem" onclick="downloadPdf(' + inv.id + ')">PDF</button> '
+        +   '<button class="btn btn-ghost btn-sm" style="font-size:0.72rem;color:var(--danger)" onclick="deleteInvoice(' + inv.id + ',\'' + escH(inv.invoice_number).replace(/'/g,'\\\'') + '\')">Supprimer</button>'
+        + '</td>'
+        + '</tr>';
+    }).join('')
+    + '</tbody>';
+}
+
+function filterInvoices() {
+  const q = (document.getElementById('invoiceSearch').value || '').toLowerCase().trim();
+  const month = (document.getElementById('invoiceMonthFilter') || {}).value || '';
+  const year  = (document.getElementById('invoiceYearFilter')  || {}).value || '';
+  const dateFrom = (document.getElementById('invoiceDateFrom') || {}).value || '';
+  const dateTo   = (document.getElementById('invoiceDateTo')   || {}).value || '';
+
+  let filtered = _invoicesCache;
+
+  if (q) {
+    filtered = filtered.filter(inv =>
+      (inv.invoice_number || '').toLowerCase().includes(q)
+      || ((inv.first_name || '') + ' ' + (inv.last_name || '')).toLowerCase().includes(q)
+      || (inv.email || '').toLowerCase().includes(q)
+      || (inv.property_name || '').toLowerCase().includes(q)
+    );
+  }
+  if (year) {
+    filtered = filtered.filter(inv => (inv.created_at || '').slice(0,4) === year);
+  }
+  if (month) {
+    filtered = filtered.filter(inv => (inv.created_at || '').slice(5,7) === month);
+  }
+  if (dateFrom) {
+    filtered = filtered.filter(inv => (inv.created_at || '').slice(0,10) >= dateFrom);
+  }
+  if (dateTo) {
+    filtered = filtered.filter(inv => (inv.created_at || '').slice(0,10) <= dateTo);
+  }
+
+  renderInvoicesTable(filtered);
+
+  /* Show total bar */
+  const totalBar = document.getElementById('invoiceTotalBar');
+  if (filtered.length && (month || year || dateFrom || dateTo)) {
+    const totalCents = filtered.reduce((sum, inv) => sum + (parseInt(inv.amount_cents) || 0), 0);
+    const totalEur = (totalCents / 100).toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
+    totalBar.innerHTML = '<strong>' + filtered.length + '</strong> facture' + (filtered.length>1?'s':'') + ' &mdash; Total : <strong>' + totalEur + '</strong>';
+    totalBar.style.display = 'block';
+  } else {
+    totalBar.style.display = 'none';
+  }
+}
+
+function resetInvoiceFilters() {
+  document.getElementById('invoiceSearch').value = '';
+  document.getElementById('invoiceMonthFilter').value = '';
+  document.getElementById('invoiceYearFilter').value = '';
+  document.getElementById('invoiceDateFrom').value = '';
+  document.getElementById('invoiceDateTo').value = '';
+  filterInvoices();
+}
+
+function deleteInvoice(id, number, clientId) {
+  if (!confirm('Supprimer la facture ' + number + ' ?\n\nLe fichier PDF sera egalement supprime. Cette action est irreversible.')) return;
+  adminFetch('api/invoices.php?id=' + id, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.deleted) {
+        showToast('Facture ' + number + ' supprimee', 'success');
+        loadInvoices();
+        if (clientId) viewClient(clientId);
+      } else {
+        showToast(data.error || 'Erreur', 'error');
+      }
+    })
+    .catch(() => showToast('Erreur reseau', 'error'));
+}
+
+/* Helper: format date string */
+function formatDt(d) {
+  if (!d) return '-';
+  try { return new Date(d).toLocaleDateString('fr-FR'); } catch(e) { return d; }
+}
+
+/* Helper: escape HTML */
+function escH(s) {
+  if (!s) return '';
+  var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SEASONS PANEL
+   ══════════════════════════════════════════════════════════════ */
+
+function renderSeasonsPanel() {
+  /* Deposit config */
+  const dep = getDepositConfig();
+  document.getElementById('depositEnabled').checked = dep.enabled;
+  document.getElementById('depositPercent').value = dep.percentage;
+
+  renderSeasonsEditor();
+  renderSeasonPricesTable();
+}
+
+function saveDepositFromUI() {
+  const enabled = document.getElementById('depositEnabled').checked;
+  const percentage = Math.min(90, Math.max(10, parseInt(document.getElementById('depositPercent').value) || 30));
+  document.getElementById('depositPercent').value = percentage;
+  saveDepositConfig({ enabled, percentage });
+  showToast('Configuration acompte sauvegardee', 'success');
+}
+
+function renderSeasonsEditor() {
+  const seasons = getSeasons();
+  const el = document.getElementById('seasonsEditor');
+  if (!seasons.length) {
+    el.innerHTML = '<p style="color:var(--text-muted)">Aucune saison definie.</p>';
+    return;
+  }
+  el.innerHTML = '<div style="display:flex;flex-direction:column;gap:0.75rem">' + seasons.map((s, i) => `
+    <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1rem;background:var(--sand);border-radius:var(--radius-md);flex-wrap:wrap">
+      <input type="color" value="${s.color || '#C4714A'}" style="width:32px;height:32px;border:none;cursor:pointer;border-radius:4px" onchange="updateSeason(${i},'color',this.value)">
+      <input class="form-input" value="${escH(s.name)}" style="flex:1;min-width:140px" placeholder="Nom" onchange="updateSeason(${i},'name',this.value)">
+      <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem">
+        <span style="color:var(--text-muted)">Du</span>
+        <input class="form-input" type="text" value="${s.from}" style="width:70px;text-align:center;font-size:0.82rem" placeholder="MM-JJ" onchange="updateSeason(${i},'from',this.value)">
+        <span style="color:var(--text-muted)">au</span>
+        <input class="form-input" type="text" value="${s.to}" style="width:70px;text-align:center;font-size:0.82rem" placeholder="MM-JJ" onchange="updateSeason(${i},'to',this.value)">
+      </div>
+      <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="removeSeason(${i})">Supprimer</button>
+    </div>
+  `).join('') + '</div>';
+}
+
+function updateSeason(idx, field, value) {
+  const seasons = getSeasons();
+  if (!seasons[idx]) return;
+  seasons[idx][field] = value;
+  saveSeasons(seasons);
+  renderSeasonsPanel();
+}
+
+function addSeason() {
+  const seasons = getSeasons();
+  const id = 'season_' + Date.now();
+  seasons.push({ id, name: 'Nouvelle saison', from: '01-01', to: '01-31', color: '#888888' });
+  saveSeasons(seasons);
+  renderSeasonsPanel();
+}
+
+function removeSeason(idx) {
+  const seasons = getSeasons();
+  if (!confirm('Supprimer la saison "' + (seasons[idx]?.name || '') + '" ?')) return;
+  const removedId = seasons[idx].id;
+  seasons.splice(idx, 1);
+  saveSeasons(seasons);
+  /* Clean up property season prices for this removed season */
+  PROPERTIES.forEach(p => { if (p.seasons) delete p.seasons[removedId]; });
+  _persist(_KEY_PROPS, PROPERTIES);
+  renderSeasonsPanel();
+}
+
+function renderSeasonPricesTable() {
+  const seasons = getSeasons();
+  const el = document.getElementById('seasonPricesTable');
+  if (!seasons.length || !PROPERTIES.length) {
+    el.innerHTML = '<tr><td style="padding:1.5rem;text-align:center;color:var(--text-muted)">Definissez d\'abord des saisons ci-dessus.</td></tr>';
+    return;
+  }
+  el.innerHTML = '<thead><tr><th>Propriete</th><th>Prix de base</th>'
+    + seasons.map(s => '<th style="text-align:center"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + s.color + ';margin-right:4px"></span>' + escH(s.name) + '<br><small style="color:var(--text-muted)">' + s.from + ' → ' + s.to + '</small></th>').join('')
+    + '</tr></thead><tbody>'
+    + PROPERTIES.map(p => {
+      const ps = p.seasons || {};
+      return '<tr><td><strong>' + escH(p.name) + '</strong></td><td style="text-align:center">&euro;' + p.price + '/nuit</td>'
+        + seasons.map(s => '<td style="text-align:center"><input class="form-input" type="number" min="0" step="1" style="width:80px;text-align:center;font-size:0.82rem" value="' + (ps[s.id] !== undefined && ps[s.id] !== '' ? ps[s.id] : '') + '" placeholder="' + p.price + '" onchange="setSeasonPrice(' + p.id + ',\'' + s.id + '\',this.value)"></td>').join('')
+        + '</tr>';
+    }).join('')
+    + '</tbody>';
+}
+
+function setSeasonPrice(propId, seasonId, value) {
+  const idx = PROPERTIES.findIndex(p => p.id === propId);
+  if (idx === -1) return;
+  if (!PROPERTIES[idx].seasons) PROPERTIES[idx].seasons = {};
+  if (value === '' || value === null) {
+    delete PROPERTIES[idx].seasons[seasonId];
+  } else {
+    PROPERTIES[idx].seasons[seasonId] = Number(value);
+  }
+  _persist(_KEY_PROPS, PROPERTIES);
+  window.PROPERTIES = PROPERTIES;
+  _notifyChange('property-updated');
+}
+
+/* Helper: escape for HTML attributes */
+function escAttr(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
+}
+
+/* ── CROSS-TAB SYNC — only react to changes from OTHER tabs ── */
+onDataChange(function(action) {
+  if (action === 'sync' || action === 'poll-sync' || action === 'visibility-sync') {
+    renderProps();
+    renderStats();
+    renderResTable(RESERVATIONS);
+    renderCalendar();
+    showToast('Données mises à jour depuis un autre onglet ↺', 'success');
+  }
+  /* Same-page actions (property-added, etc.) are already handled by saveProp/confirmDelete */
+});
+
+/* ── [SEC-INIT] Async auth check — full fingerprint verification ──────────────
+ * requireAuth() re-validates the session AND checks the browser fingerprint.
+ * Body remains hidden (visibility:hidden from <head>) until this resolves.
+ * If the check fails for any reason, the user is redirected to login.
+ */
+requireAuth().then(function(session) {
+  if (!session) return; /* requireAuth already redirected to login.html */
+  document.body.style.visibility = 'visible';
+  var el = document.getElementById('adminUserName');
+  if (el) el.textContent = session.name || 'Admin';
+  switchTab('stats');
+});
+</script>
+</body>
+</html>

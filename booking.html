@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reservation & Paiement — Solara</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .booking-page {
+      margin-top: var(--nav-h);
+      background: var(--beige);
+      min-height: calc(100vh - var(--nav-h));
+      padding: var(--space-xl) var(--content-px) var(--space-3xl);
+    }
+    .booking-container {
+      max-width: 980px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 400px;
+      gap: var(--space-xl); align-items: start;
+    }
+
+    /* STEPS — refined progress bar */
+    .steps-bar {
+      display: flex; align-items: center; gap: 0;
+      margin-bottom: var(--space-xl);
+      max-width: 980px; margin-left: auto; margin-right: auto;
+    }
+    .step { display: flex; align-items: center; gap: 0.75rem; }
+    .step-num {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 500;
+      border: 2px solid var(--beige-dark);
+      color: var(--text-muted);
+      transition: all 0.4s var(--ease-spring);
+    }
+    .step.active .step-num { background: var(--terra); border-color: var(--terra); color: white; box-shadow: 0 4px 12px rgba(196,114,74,0.3); }
+    .step.done .step-num { background: var(--success); border-color: var(--success); color: white; }
+    .step-label { font-size: 0.8rem; font-weight: 500; color: var(--text-muted); }
+    .step.active .step-label { color: var(--ocean); font-weight: 600; }
+    .step-line { flex: 1; height: 2px; background: var(--beige-dark); margin: 0 0.75rem; }
+    .step.done + .step-line { background: var(--success); }
+
+    /* FORM CARD */
+    .booking-form-card {
+      background: var(--white);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--beige-mid);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .booking-form-section { padding: 2rem; border-bottom: 1px solid var(--beige-mid); }
+    .booking-form-section:last-child { border-bottom: none; }
+    .booking-form-section h3 {
+      font-size: 1.1rem; margin-bottom: 1.5rem;
+      display: flex; align-items: center; gap: 0.75rem;
+      color: var(--ocean);
+    }
+    .section-num {
+      width: 28px; height: 28px; background: var(--terra); color: white;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 600; flex-shrink: 0;
+      font-family: var(--font-body);
+    }
+
+    /* FLOATING LABEL INPUTS */
+    .float-group {
+      position: relative;
+      margin-bottom: 1.25rem;
+    }
+    .float-group input,
+    .float-group textarea,
+    .float-group select {
+      width: 100%;
+      padding: 1.35rem 1rem 0.5rem;
+      border: none;
+      border-bottom: 2px solid var(--beige-dark);
+      border-radius: 0;
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      color: var(--dark);
+      background: var(--sand);
+      outline: none;
+      transition: border-color 0.3s var(--ease-out);
+    }
+    .float-group input:focus,
+    .float-group textarea:focus,
+    .float-group select:focus {
+      border-color: var(--terra);
+    }
+    .float-group input::placeholder,
+    .float-group textarea::placeholder { color: transparent; }
+    .float-group label {
+      position: absolute;
+      left: 1rem; top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.875rem;
+      color: var(--ocean-light);
+      pointer-events: none;
+      transition: all 0.25s var(--ease-out);
+      transform-origin: left;
+    }
+    .float-group textarea ~ label {
+      top: 1.25rem; transform: translateY(0);
+    }
+    .float-group input:focus + label,
+    .float-group input:not(:placeholder-shown) + label,
+    .float-group textarea:focus + label,
+    .float-group textarea:not(:placeholder-shown) + label,
+    .float-group select + label {
+      top: 0.45rem;
+      transform: translateY(0);
+      font-size: 0.65rem;
+      color: var(--terra);
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .float-group select + label {
+      top: 0.45rem;
+      transform: translateY(0);
+      font-size: 0.65rem;
+      color: var(--terra);
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .float-group select { cursor: pointer; }
+    .float-group textarea { resize: vertical; min-height: 80px; padding-top: 1.5rem; }
+    .float-hint {
+      font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem; padding-left: 1rem;
+    }
+
+    /* STRIPE REDIRECT ZONE */
+    .stripe-redirect-box {
+      background: linear-gradient(135deg, rgba(69,123,157,0.06) 0%, rgba(29,53,87,0.04) 100%);
+      border: 1.5px solid rgba(69,123,157,0.2);
+      border-radius: var(--radius-lg);
+      padding: 1.75rem;
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+    .stripe-redirect-box .stripe-logo-row {
+      display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .stripe-redirect-box h4 { font-size: 1rem; color: var(--ocean); margin-bottom: 0.5rem; }
+    .stripe-redirect-box p { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+    .stripe-features {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
+      margin-top: 1rem; text-align: left;
+    }
+    .stripe-feature {
+      display: flex; align-items: center; gap: 0.4rem;
+      font-size: 0.78rem; color: var(--charcoal-mid);
+    }
+
+    .secure-bar {
+      display: flex; align-items: center; gap: 0.75rem;
+      background: rgba(74,124,89,0.06);
+      border: 1px solid rgba(74,124,89,0.15);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .secure-bar .icon { font-size: 1.1rem; }
+    .secure-bar p { font-size: 0.8rem; color: var(--success); margin: 0; font-family: var(--font-body); line-height: 1.4; }
+
+    /* PAY BUTTON — Premium Gold */
+    .pay-btn {
+      width: 100%; padding: 1.1rem; font-size: 1.05rem;
+      border-radius: var(--radius-pill);
+      background: var(--gold);
+      color: var(--dark); border: none;
+      font-family: var(--font-body);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.35s var(--ease-spring);
+      display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    .pay-btn::before {
+      content: '';
+      position: absolute; top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+      transition: left 0.5s var(--ease-out);
+    }
+    .pay-btn:hover::before { left: 100%; }
+    .pay-btn:hover {
+      background: #B8963D;
+      transform: translateY(-2px);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), var(--shadow-glow-gold);
+    }
+    .pay-btn:active { transform: scale(0.97) !important; }
+    .pay-btn:disabled { opacity: 0.6; cursor: wait; transform: none !important; box-shadow: none; }
+
+    .pay-error {
+      background: rgba(176,74,74,0.06); border: 1px solid rgba(176,74,74,0.15);
+      color: var(--danger); border-radius: var(--radius-sm);
+      padding: 0.7rem 1rem; font-size: 0.82rem;
+      margin-top: 1rem; display: none;
+    }
+    .pay-error.visible { display: block; }
+
+    /* SUMMARY CARD */
+    .summary-card {
+      background: var(--white);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--beige-mid);
+      overflow: hidden;
+      position: sticky;
+      top: calc(var(--nav-h) + 1.5rem);
+      box-shadow: var(--shadow-md);
+    }
+    .summary-card::before {
+      content: '';
+      display: block;
+      height: 3px; background: var(--gold);
+    }
+    .summary-prop-img { width: 100%; aspect-ratio: 16/10; object-fit: cover; }
+    .summary-body { padding: 1.5rem; }
+    .summary-prop-name { font-family: var(--font-display); font-size: 1.3rem; margin-bottom: 0.25rem; color: var(--ocean); }
+    .summary-prop-loc { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem; }
+    .summary-dates {
+      display: grid; grid-template-columns: 1fr 1fr;
+      background: var(--sand); border-radius: var(--radius-md);
+      overflow: hidden; margin-bottom: 1.25rem;
+    }
+    .summary-date { padding: 0.75rem 1rem; }
+    .summary-date:first-child { border-right: 1px solid var(--beige-dark); }
+    .summary-date label { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ocean-light); display: block; margin-bottom: 0.2rem; }
+    .summary-date .date-val { font-size: 0.9rem; font-weight: 500; color: var(--ocean); }
+    .summary-rows { font-size: 0.875rem; }
+    .summary-row { display: flex; justify-content: space-between; padding: 0.5rem 0; color: var(--charcoal-mid); }
+    .summary-total { display: flex; justify-content: space-between; padding: 1rem 0 0.5rem; font-weight: 600; font-size: 1.1rem; border-top: 2px solid var(--beige-mid); margin-top: 0.5rem; color: var(--ocean); }
+
+    /* CANCELLATION POLICY */
+    .cancellation-section {
+      background: var(--sand);
+      padding: 1.75rem 2rem;
+    }
+    .cancellation-section h4 { color: var(--ocean); margin-bottom: 1rem; }
+    .cancel-row {
+      display: flex; gap: 0.75rem; font-size: 0.875rem;
+      margin-bottom: 0.5rem; align-items: center;
+    }
+    .cancel-icon { font-size: 0.9rem; flex-shrink: 0; }
+
+    @media(max-width:900px) {
+      .booking-container { grid-template-columns: 1fr; }
+      .summary-card { position: static; }
+      .stripe-features { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- NAV -->
+  <nav class="nav scrolled">
+    <a href="index.html" class="nav-logo">Sol<span>ara</span></a>
+    <ul class="nav-links">
+      <li><a href="index.html">Proprietes</a></li>
+    </ul>
+    <div class="nav-right">
+      <a href="index.html" class="btn btn-ghost btn-sm">&larr; Retour</a>
+    </div>
+  </nav>
+
+  <div class="booking-page">
+    <!-- STEPS -->
+    <div class="steps-bar reveal">
+      <div class="step done">
+        <div class="step-num">&#10003;</div>
+        <div class="step-label">Dates</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step done">
+        <div class="step-num">&#10003;</div>
+        <div class="step-label">Propriete</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step active">
+        <div class="step-num">3</div>
+        <div class="step-label">Vos informations</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-label">Paiement</div>
+      </div>
+    </div>
+
+    <div class="booking-container">
+      <!-- LEFT — FORM -->
+      <div>
+        <div class="booking-form-card reveal">
+
+          <!-- SECTION 1 — Voyageur principal (Floating Labels) -->
+          <div class="booking-form-section">
+            <h3><span class="section-num">1</span> Voyageur principal</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+              <div class="float-group">
+                <input type="text" id="guestFirst" placeholder="Prenom" required>
+                <label>Prenom</label>
+              </div>
+              <div class="float-group">
+                <input type="text" id="guestLast" placeholder="Nom" required>
+                <label>Nom</label>
+              </div>
+            </div>
+            <div class="float-group">
+              <input type="email" id="guestEmail" placeholder="Email" required>
+              <label>Adresse email</label>
+              <div class="float-hint">Votre recu de paiement Stripe sera envoye a cette adresse.</div>
+            </div>
+            <div class="float-group" style="margin-bottom:0">
+              <input type="tel" id="guestPhone" placeholder="Telephone">
+              <label>Telephone</label>
+            </div>
+          </div>
+
+          <!-- SECTION 2 — Informations sejour -->
+          <div class="booking-form-section">
+            <h3><span class="section-num">2</span> Informations sejour</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+              <div class="float-group">
+                <select id="guestAdults">
+                  <option value="1">1 adulte</option>
+                  <option value="2" selected>2 adultes</option>
+                  <option value="3">3 adultes</option>
+                  <option value="4">4 adultes</option>
+                  <option value="5">5 adultes</option>
+                  <option value="6">6 adultes</option>
+                </select>
+                <label>Nombre d'adultes</label>
+              </div>
+              <div class="float-group">
+                <select id="guestChildren">
+                  <option value="0" selected>0 enfant</option>
+                  <option value="1">1 enfant</option>
+                  <option value="2">2 enfants</option>
+                  <option value="3">3 enfants</option>
+                  <option value="4">4 enfants</option>
+                </select>
+                <label>Enfants</label>
+              </div>
+            </div>
+            <div class="float-group" style="margin-bottom:0">
+              <textarea id="guestMessage" rows="3" placeholder="Message"></textarea>
+              <label>Message pour la conciergerie (optionnel)</label>
+            </div>
+          </div>
+
+          <!-- SECTION 3 — Paiement via Stripe -->
+          <div class="booking-form-section">
+            <h3><span class="section-num">3</span> Paiement securise</h3>
+
+            <div class="stripe-redirect-box">
+              <div class="stripe-logo-row">
+                <span style="font-size:1.5rem">&#128274;</span>
+                <img src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg"
+                     alt="Stripe" style="height:24px;filter:brightness(0) saturate(100%) invert(27%) sepia(50%) saturate(2000%) hue-rotate(195deg)">
+              </div>
+              <h4>Vous allez etre redirige vers Stripe</h4>
+              <p>Votre paiement est traite par Stripe, leader mondial du paiement securise. Vos donnees bancaires ne transitent jamais par nos serveurs.</p>
+              <div class="stripe-features">
+                <div class="stripe-feature">&#10004; Certifie PCI-DSS niveau 1</div>
+                <div class="stripe-feature">&#128274; Chiffrement SSL 256-bit</div>
+                <div class="stripe-feature">&#128179; CB, Visa, Mastercard, AMEX</div>
+                <div class="stripe-feature">&#128231; Recu par email automatique</div>
+              </div>
+            </div>
+
+            <div class="secure-bar">
+              <span class="icon">&#128737;</span>
+              <p>Transaction 100% securisee. Vous serez redirige vers la page de paiement Stripe puis automatiquement renvoye ici apres confirmation.</p>
+            </div>
+
+            <!-- DEPOSIT CHOICE (shown only when acompte is enabled in admin) -->
+            <div id="depositChoiceBox" style="display:none;margin-bottom:1.5rem">
+              <div style="background:var(--sand);border-radius:var(--radius-md);padding:1.25rem;border:1.5px solid var(--beige-dark)">
+                <div style="font-weight:600;font-size:0.9rem;color:var(--ocean);margin-bottom:1rem">Mode de paiement</div>
+                <label style="display:flex;align-items:flex-start;gap:0.75rem;cursor:pointer;padding:0.75rem;border-radius:var(--radius-sm);border:1.5px solid var(--beige-dark);margin-bottom:0.5rem;background:var(--white);transition:all 0.2s" id="optDeposit">
+                  <input type="radio" name="paymentMode" value="deposit" style="accent-color:var(--terra);margin-top:3px;flex-shrink:0" checked>
+                  <div>
+                    <div style="font-weight:600;font-size:0.875rem;color:var(--ocean)" id="depositLabel">Payer l'acompte</div>
+                    <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem" id="depositDesc">Description</div>
+                  </div>
+                </label>
+                <label style="display:flex;align-items:flex-start;gap:0.75rem;cursor:pointer;padding:0.75rem;border-radius:var(--radius-sm);border:1.5px solid var(--beige-dark);background:var(--white);transition:all 0.2s" id="optFull">
+                  <input type="radio" name="paymentMode" value="full" style="accent-color:var(--terra);margin-top:3px;flex-shrink:0">
+                  <div>
+                    <div style="font-weight:600;font-size:0.875rem;color:var(--ocean)">Payer la totalite</div>
+                    <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem" id="fullDesc">Description</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Terms -->
+            <label style="display:flex;gap:0.75rem;align-items:flex-start;font-size:0.82rem;color:var(--charcoal-mid);cursor:pointer;margin-bottom:1.5rem">
+              <input type="checkbox" id="acceptTerms" style="accent-color:var(--terra);margin-top:2px;flex-shrink:0">
+              <span>J'accepte les <a href="cgv.html" target="_blank" style="color:var(--terra);text-decoration:underline">conditions generales de vente</a> et la <a href="confidentialite.html" target="_blank" style="color:var(--terra);text-decoration:underline">politique de confidentialite</a>.</span>
+            </label>
+
+            <!-- PAY BUTTON — Premium Gold (single per section) -->
+            <button class="pay-btn" id="payBtn" onclick="handleStripeCheckout()">
+              <span>&#128274;</span>
+              <span id="payBtnText">Confirmer et payer &mdash; &euro;<span id="payTotal">0</span></span>
+            </button>
+            <div class="pay-error" id="payError"></div>
+          </div>
+
+          <!-- CANCELLATION POLICY -->
+          <div class="cancellation-section">
+            <h4>Politique d'annulation flexible</h4>
+            <div class="cancel-row"><span class="cancel-icon" style="color:var(--success)">&#10003;</span><span>Remboursement integral jusqu'a 48h avant l'arrivee</span></div>
+            <div class="cancel-row"><span class="cancel-icon" style="color:var(--gold)">~</span><span>Remboursement partiel (50%) entre 24h et 48h avant l'arrivee</span></div>
+            <div class="cancel-row"><span class="cancel-icon" style="color:var(--danger)">&#10007;</span><span>Aucun remboursement moins de 24h avant l'arrivee</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT — SUMMARY -->
+      <div class="summary-card reveal" id="summaryCard">
+        <img class="summary-prop-img" id="summaryImg" src="" alt="">
+        <div class="summary-body">
+          <div class="summary-prop-name" id="summaryName">&mdash;</div>
+          <div class="summary-prop-loc" id="summaryLoc"></div>
+          <div class="summary-dates">
+            <div class="summary-date">
+              <label>Arrivee</label>
+              <div class="date-val" id="summaryCheckin">&mdash;</div>
+            </div>
+            <div class="summary-date">
+              <label>Depart</label>
+              <div class="date-val" id="summaryCheckout">&mdash;</div>
+            </div>
+          </div>
+          <div class="summary-rows">
+            <div class="summary-row"><span id="sumNightsLabel">Sejour</span><span id="sumBase">&mdash;</span></div>
+            <div class="summary-row"><span>Frais de service (12%)</span><span id="sumFees">&mdash;</span></div>
+            <div class="summary-total"><span>Total TTC</span><span id="sumTotal">&mdash;</span></div>
+          </div>
+          <!-- Trust -->
+          <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--beige-mid);display:flex;flex-direction:column;gap:0.6rem">
+            <div style="display:flex;align-items:center;gap:0.6rem;font-size:0.78rem;color:var(--charcoal-mid)">&#128274; Paiement 100% securise via Stripe</div>
+            <div style="display:flex;align-items:center;gap:0.6rem;font-size:0.78rem;color:var(--charcoal-mid)">&#10004; Propriete inspectee et verifiee Solara</div>
+            <div style="display:flex;align-items:center;gap:0.6rem;font-size:0.78rem;color:var(--charcoal-mid)">&#128172; Conciergerie disponible 24h/7j</div>
+            <div style="display:flex;align-items:center;gap:0.6rem;font-size:0.78rem;color:var(--charcoal-mid)">&#128260; Annulation gratuite jusqu'a 48h avant</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div>
+          <span class="footer-logo">Sol<span>ara</span></span>
+          <p>La conciergerie immobiliere premium pour voyager et vivre l'Espagne autrement.</p>
+        </div>
+        <div>
+          <h5>Informations</h5>
+          <ul><li><a href="#">A propos</a></li><li><a href="cgv.html">CGV</a></li><li><a href="confidentialite.html">Confidentialite</a></li><li><a href="#">Contact</a></li></ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2025 Solara. Tous droits reserves.</p>
+        <div class="payment-badges">
+          <span class="payment-badge">VISA</span>
+          <span class="payment-badge">MC</span>
+          <span class="payment-badge">STRIPE</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/app.js"></script>
+  <script src="js/data.js"></script>
+  <script>
+    /* Load booking data */
+    var bookingData = JSON.parse(localStorage.getItem('solaraBooking') || 'null');
+    var prop = bookingData ? PROPERTIES.find(function(p) { return p.id === bookingData.propId; }) : PROPERTIES[0];
+    var bk = bookingData || {
+      propName: prop.name,
+      checkin:  '',
+      checkout: '',
+      nights:   7,
+      price:    prop.price,
+      base:     prop.price * 7,
+      fees:     Math.round(prop.price * 7 * 0.12),
+      total:    prop.price * 7 + Math.round(prop.price * 7 * 0.12)
+    };
+
+    /* Populate summary */
+    document.getElementById('summaryImg').src       = prop.imgs[0];
+    document.getElementById('summaryName').textContent = prop.name;
+    document.getElementById('summaryLoc').textContent  = prop.location;
+    document.getElementById('summaryCheckin').textContent  = bk.checkin  ? new Date(bk.checkin).toLocaleDateString('fr-FR',  {day:'numeric',month:'short',year:'numeric'}) : '—';
+    document.getElementById('summaryCheckout').textContent = bk.checkout ? new Date(bk.checkout).toLocaleDateString('fr-FR', {day:'numeric',month:'short',year:'numeric'}) : '—';
+    document.getElementById('sumNightsLabel').textContent  = '€' + bk.price + ' × ' + bk.nights + ' nuit' + (bk.nights > 1 ? 's' : '');
+    document.getElementById('sumBase').textContent  = '€' + bk.base;
+    document.getElementById('sumFees').textContent  = '€' + bk.fees;
+    document.getElementById('sumTotal').textContent = '€' + bk.total;
+
+    /* Deposit system */
+    var deposit = calcDepositAmount(bk.total);
+    var chargeAmount = deposit.chargeAmount;
+    var isDepositPayment = deposit.isDeposit;
+
+    function updatePayButton() {
+      var selectedMode = document.querySelector('input[name="paymentMode"]:checked');
+      if (deposit.isDeposit && selectedMode) {
+        if (selectedMode.value === 'deposit') {
+          chargeAmount = deposit.chargeAmount;
+          isDepositPayment = true;
+          document.getElementById('payTotal').textContent = chargeAmount + ' (acompte ' + deposit.depositPercent + '%)';
+        } else {
+          chargeAmount = bk.total;
+          isDepositPayment = false;
+          document.getElementById('payTotal').textContent = bk.total;
+        }
+      } else {
+        chargeAmount = bk.total;
+        isDepositPayment = false;
+        document.getElementById('payTotal').textContent = bk.total;
+      }
+    }
+
+    if (deposit.isDeposit) {
+      /* Show deposit choice UI */
+      document.getElementById('depositChoiceBox').style.display = 'block';
+      document.getElementById('depositLabel').textContent = 'Payer l\'acompte (' + deposit.depositPercent + '%)';
+      document.getElementById('depositDesc').textContent = 'Payez \u20AC' + deposit.chargeAmount + ' maintenant. Le solde de \u20AC' + deposit.remainingAmount + ' sera a regler avant votre arrivee.';
+      document.getElementById('fullDesc').textContent = 'Reglez la totalite de \u20AC' + bk.total + ' maintenant.';
+
+      /* Radio change listeners */
+      document.querySelectorAll('input[name="paymentMode"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+          updatePayButton();
+          /* Visual highlight */
+          document.getElementById('optDeposit').style.borderColor = this.value === 'deposit' ? 'var(--terra)' : 'var(--beige-dark)';
+          document.getElementById('optFull').style.borderColor = this.value === 'full' ? 'var(--terra)' : 'var(--beige-dark)';
+        });
+      });
+      /* Initial highlight */
+      document.getElementById('optDeposit').style.borderColor = 'var(--terra)';
+    }
+
+    updatePayButton();
+
+    /* Stripe Checkout handler */
+    async function handleStripeCheckout() {
+      var errorEl = document.getElementById('payError');
+      errorEl.classList.remove('visible');
+
+      var first = document.getElementById('guestFirst').value.trim();
+      var last  = document.getElementById('guestLast').value.trim();
+      var email = document.getElementById('guestEmail').value.trim();
+      var terms = document.getElementById('acceptTerms').checked;
+
+      if (!first || !last) {
+        errorEl.textContent = 'Veuillez indiquer votre prenom et nom.';
+        errorEl.classList.add('visible');
+        document.getElementById('guestFirst').focus();
+        return;
+      }
+      if (!email || !email.includes('@')) {
+        errorEl.textContent = 'Veuillez indiquer une adresse email valide.';
+        errorEl.classList.add('visible');
+        document.getElementById('guestEmail').focus();
+        return;
+      }
+      if (!terms) {
+        errorEl.textContent = 'Veuillez accepter les conditions generales de vente.';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      var btn = document.getElementById('payBtn');
+      btn.disabled = true;
+      document.getElementById('payBtnText').innerHTML = '&#9203; Redirection vers Stripe...';
+
+      try {
+        var guestName = first + ' ' + last;
+        var phone = (document.getElementById('guestPhone') || {}).value || '';
+        var message = (document.getElementById('guestMessage') || {}).value || '';
+
+        /* ──────────────────────────────────────────────────────────────
+           MODE DÉMO — paiement simulé, sans backend Stripe/PHP.
+           Génère une fausse session puis redirige vers la page de succès,
+           exactement comme si Stripe avait confirmé le paiement.
+           Pour repasser en vrai Stripe : restaurer l'appel fetch a
+           'api/create-checkout.php' (voir historique git).
+           ────────────────────────────────────────────────────────────── */
+        var data = {
+          session_id: 'DEMO_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+          url: null
+        };
+        data.url = 'success.html?session_id=' + encodeURIComponent(data.session_id);
+
+        /* Create a PENDING reservation before redirecting.
+           It will be confirmed on the success page. */
+        var pendingRes = {
+          id:            'SOL-' + data.session_id.slice(-8).toUpperCase(),
+          guest:         guestName,
+          email:         email,
+          phone:         phone,
+          message:       message,
+          property:      prop.name,
+          propId:        prop.id,
+          checkin:       bk.checkin,
+          checkout:      bk.checkout,
+          nights:        bk.nights,
+          total:         bk.total,
+          amountPaid:    chargeAmount,
+          isDeposit:     isDepositPayment,
+          depositPercent: isDepositPayment ? deposit.depositPercent : null,
+          remainingAmount: isDepositPayment ? (bk.total - chargeAmount) : 0,
+          status:        'pending',
+          paid:          false,
+          stripeSession: data.session_id,
+          createdAt:     new Date().toISOString()
+        };
+
+        /* Save pending reservation to localStorage */
+        var reservations = [];
+        try { reservations = JSON.parse(localStorage.getItem('solara_reservations') || '[]'); } catch(e) {}
+        reservations.push(pendingRes);
+        localStorage.setItem('solara_reservations', JSON.stringify(reservations));
+
+        /* Store session info for the success page */
+        bk.stripeSession = data.session_id;
+        bk.reservationId = pendingRes.id;
+        bk.guestName     = guestName;
+        bk.guestEmail    = email;
+        localStorage.setItem('solaraBooking', JSON.stringify(bk));
+
+        /* Notify other tabs of the new pending reservation */
+        var v = parseInt(localStorage.getItem('solara_version') || '0') + 1;
+        localStorage.setItem('solara_version', String(v));
+        try { new BroadcastChannel('solara_sync').postMessage({ action: 'reservation-added', version: v }); } catch(e) {}
+
+        window.location.href = data.url;
+
+      } catch (err) {
+        btn.disabled = false;
+        document.getElementById('payBtnText').innerHTML = 'Confirmer et payer &mdash; &euro;<span id="payTotal">' + bk.total + '</span>';
+        errorEl.textContent = err.message || 'Erreur lors de la connexion a Stripe. Veuillez reessayer.';
+        errorEl.classList.add('visible');
+      }
+    }
+  </script>
+</body>
+</html>

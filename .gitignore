@@ -1,0 +1,15 @@
+# Backend PHP — non déployé (démo statique sur Vercel). Conservé en local pour OVH.
+api/
+invoices/
+
+# Secrets / données sensibles (ne jamais committer)
+**/config.php
+**/*.env
+.env
+
+# Dossier créé par erreur
+{css,js,assets}/
+
+# Système
+.DS_Store
+Thumbs.db

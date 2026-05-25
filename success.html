@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reservation confirmee — Solara</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body {
+      background: var(--beige);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 2rem;
+    }
+    .success-card {
+      background: var(--white);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--beige-mid);
+      padding: 3rem 2.5rem;
+      max-width: 560px;
+      width: 100%;
+      text-align: center;
+      box-shadow: var(--shadow-xl);
+      animation: slideUp 0.6s var(--ease-spring) both;
+      position: relative;
+      overflow: hidden;
+    }
+    .success-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 3px; background: var(--gold);
+    }
+    @keyframes slideUp {
+      from { opacity:0; transform:translateY(24px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    .success-icon {
+      font-size: 4rem;
+      margin-bottom: 1.5rem;
+      animation: popIn 0.5s 0.2s var(--ease-spring) both;
+      display: block;
+    }
+    @keyframes popIn {
+      from { transform:scale(0); }
+      to   { transform:scale(1); }
+    }
+    h1 {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      margin-bottom: 0.75rem;
+      color: var(--ocean);
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+      line-height: 1.7;
+    }
+    .ref-box {
+      background: var(--sand);
+      border: 1.5px dashed var(--beige-dark);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .ref-label { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.3rem; }
+    .ref-value { font-family: var(--font-display); font-size: 1.5rem; color: var(--terra); font-weight: 600; }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      text-align: left;
+    }
+    .detail-item { background: var(--sand); border-radius: var(--radius-md); padding: 0.85rem 1rem; }
+    .detail-item label { font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ocean-light); font-weight: 600; display: block; margin-bottom: 0.2rem; }
+    .detail-item span { font-size: 0.9rem; font-weight: 500; color: var(--ocean); }
+
+    .actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2rem; }
+
+    .trust-row {
+      display: flex; flex-direction: column; gap: 0.5rem;
+      padding-top: 1.5rem; border-top: 1px solid var(--beige-mid);
+      font-size: 0.8rem; color: var(--charcoal-mid);
+    }
+    .trust-row div { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+
+    .loading-state { display: flex; flex-direction: column; align-items: center; gap: 1rem; color: var(--text-muted); }
+    .spinner { width: 40px; height: 40px; border: 3px solid var(--beige-dark); border-top-color: var(--terra); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media(max-width:500px) {
+      .detail-grid { grid-template-columns: 1fr; }
+      .success-card { padding: 2rem 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="success-card" id="card">
+    <!-- Loading state -->
+    <div class="loading-state" id="loadingState">
+      <div class="spinner"></div>
+      <p>Confirmation du paiement en cours...</p>
+    </div>
+
+    <!-- Success state -->
+    <div id="successState" style="display:none">
+      <span class="success-icon">&#10004;</span>
+      <h1>Reservation confirmee</h1>
+      <p class="subtitle">Votre paiement a bien ete recu. Un email de confirmation vous a ete envoye avec tous les details de votre sejour.</p>
+
+      <div class="ref-box">
+        <div class="ref-label">Reference de reservation</div>
+        <div class="ref-value" id="refValue">&mdash;</div>
+      </div>
+
+      <div class="detail-grid" id="detailGrid"></div>
+
+      <div class="actions">
+        <a href="index.html" class="btn btn-primary">Retour a l'accueil</a>
+        <a id="invoiceBtn" href="#" class="btn btn-ghost" style="display:none">Telecharger la facture (PDF)</a>
+        <a href="index.html" class="btn btn-ghost">Explorer d'autres villas</a>
+      </div>
+
+      <div class="trust-row">
+        <div>&#128231; Email de confirmation envoye automatiquement par Stripe</div>
+        <div>&#128274; Paiement securise et certifie PCI-DSS</div>
+        <div>&#128172; Besoin d'aide ? Contactez notre conciergerie</div>
+      </div>
+    </div>
+
+    <!-- Error state -->
+    <div id="errorState" style="display:none">
+      <span class="success-icon" style="filter:hue-rotate(180deg)">&#9888;</span>
+      <h1 style="color:var(--danger)">Une erreur est survenue</h1>
+      <p class="subtitle" id="errorMsg">Impossible de verifier votre paiement. Veuillez nous contacter si vous avez ete debite.</p>
+      <div class="actions">
+        <a href="booking.html" class="btn btn-primary">Reessayer</a>
+        <a href="index.html" class="btn btn-ghost">Retour a l'accueil</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    (function () {
+      var params     = new URLSearchParams(window.location.search);
+      var sessionId  = params.get('session_id');
+      var bk         = JSON.parse(localStorage.getItem('solaraBooking') || 'null');
+
+      function showSuccess(ref, details) {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('successState').style.display = 'block';
+        document.getElementById('refValue').textContent = ref || ('SOL-' + Math.random().toString(36).substr(2,8).toUpperCase());
+        var grid = document.getElementById('detailGrid');
+        if (details && details.length) {
+          grid.innerHTML = details.map(function(d) {
+            return '<div class="detail-item"><label>' + d.label + '</label><span>' + d.value + '</span></div>';
+          }).join('');
+        } else {
+          grid.style.display = 'none';
+        }
+        localStorage.removeItem('solaraBooking');
+      }
+
+      function showError(msg) {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('errorState').style.display = 'block';
+        if (msg) document.getElementById('errorMsg').textContent = msg;
+      }
+
+      /**
+       * Confirm a pending reservation in localStorage after payment verification.
+       * Updates status to 'confirmed', marks as paid, and syncs across tabs.
+       */
+      function confirmReservation(reservationId, stripeSessionId) {
+        var reservations = [];
+        try { reservations = JSON.parse(localStorage.getItem('solara_reservations') || '[]'); } catch(e) {}
+
+        var found = false;
+        for (var i = 0; i < reservations.length; i++) {
+          if (reservations[i].id === reservationId ||
+              reservations[i].stripeSession === stripeSessionId) {
+            /* If deposit was paid, set status to 'acompte' instead of 'confirmed' */
+            if (reservations[i].isDeposit) {
+              reservations[i].status = 'acompte';
+            } else {
+              reservations[i].status = 'confirmed';
+            }
+            reservations[i].paid    = true;
+            reservations[i].paidAt  = new Date().toISOString();
+            found = true;
+            break;
+          }
+        }
+
+        if (found) {
+          localStorage.setItem('solara_reservations', JSON.stringify(reservations));
+          /* Notify other tabs (admin dashboard) of the update */
+          var v = parseInt(localStorage.getItem('solara_version') || '0') + 1;
+          localStorage.setItem('solara_version', String(v));
+          try { new BroadcastChannel('solara_sync').postMessage({ action: 'reservation-confirmed', version: v }); } catch(e) {}
+        }
+        return found;
+      }
+
+      /**
+       * Remove a pending reservation (payment failed/cancelled).
+       */
+      function removePendingReservation(reservationId, stripeSessionId) {
+        var reservations = [];
+        try { reservations = JSON.parse(localStorage.getItem('solara_reservations') || '[]'); } catch(e) {}
+
+        reservations = reservations.filter(function(r) {
+          return r.id !== reservationId && r.stripeSession !== stripeSessionId;
+        });
+
+        localStorage.setItem('solara_reservations', JSON.stringify(reservations));
+        var v = parseInt(localStorage.getItem('solara_version') || '0') + 1;
+        localStorage.setItem('solara_version', String(v));
+        try { new BroadcastChannel('solara_sync').postMessage({ action: 'reservation-deleted', version: v }); } catch(e) {}
+      }
+
+      var details = [];
+      if (bk) {
+        if (bk.propName)  details.push({ label: 'Propriete',  value: bk.propName });
+        if (bk.checkin)   details.push({ label: 'Arrivee',    value: new Date(bk.checkin).toLocaleDateString('fr-FR', {day:'numeric',month:'long',year:'numeric'}) });
+        if (bk.checkout)  details.push({ label: 'Depart',     value: new Date(bk.checkout).toLocaleDateString('fr-FR', {day:'numeric',month:'long',year:'numeric'}) });
+        if (bk.nights)    details.push({ label: 'Duree',      value: bk.nights + ' nuit' + (bk.nights > 1 ? 's' : '') });
+        if (bk.total)     details.push({ label: 'Total sejour', value: '\u20AC' + bk.total });
+      }
+
+      if (!sessionId) {
+        showError('Parametre de session manquant. Si vous avez bien paye, conservez votre recu Stripe.');
+        return;
+      }
+
+      /* ── MODE DÉMO : session simulée (DEMO_...) → on confirme sans backend ── */
+      if (sessionId.indexOf('DEMO_') === 0) {
+        var demoResId = bk ? bk.reservationId : null;
+        confirmReservation(demoResId, sessionId);
+
+        var demoReservations = [];
+        try { demoReservations = JSON.parse(localStorage.getItem('solara_reservations') || '[]'); } catch(e) {}
+        var demoRes = demoReservations.find(function(r) { return r.id === demoResId || r.stripeSession === sessionId; });
+        if (demoRes && demoRes.isDeposit) {
+          document.querySelector('.subtitle').textContent = 'Votre acompte de €' + demoRes.amountPaid + ' a bien ete recu. Le solde de €' + demoRes.remainingAmount + ' sera a regler avant votre arrivee.';
+          details.push({ label: 'Acompte paye', value: '€' + demoRes.amountPaid + ' (' + demoRes.depositPercent + '%)' });
+          details.push({ label: 'Solde restant', value: '€' + demoRes.remainingAmount });
+        }
+        showSuccess('SOL-' + sessionId.slice(-8).toUpperCase(), details);
+        return;
+      }
+
+      /* ── Verify payment server-side via Stripe API ── */
+      fetch('api/verify-payment.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.verified) {
+          /* Payment confirmed by Stripe — update reservation to confirmed */
+          var resId = bk ? bk.reservationId : null;
+          confirmReservation(resId, sessionId);
+
+          /* Check if this was a deposit payment to update the message */
+          var reservations = [];
+          try { reservations = JSON.parse(localStorage.getItem('solara_reservations') || '[]'); } catch(e) {}
+          var confirmedRes = reservations.find(function(r) { return r.id === resId || r.stripeSession === sessionId; });
+          if (confirmedRes && confirmedRes.isDeposit) {
+            document.querySelector('.subtitle').textContent = 'Votre acompte de \u20AC' + confirmedRes.amountPaid + ' a bien ete recu. Le solde de \u20AC' + confirmedRes.remainingAmount + ' sera a regler avant votre arrivee.';
+            details.push({ label: 'Acompte paye', value: '\u20AC' + confirmedRes.amountPaid + ' (' + confirmedRes.depositPercent + '%)' });
+            details.push({ label: 'Solde restant', value: '\u20AC' + confirmedRes.remainingAmount });
+          }
+
+          var ref = 'SOL-' + sessionId.slice(-8).toUpperCase();
+          showSuccess(ref, details);
+
+          /* Show invoice download button if available (with signed token) */
+          if (data.invoice_id && data.download_token) {
+            var btn = document.getElementById('invoiceBtn');
+            btn.href = 'api/invoices.php?download=' + data.invoice_id + '&token=' + encodeURIComponent(data.download_token);
+            btn.style.display = '';
+          }
+        } else {
+          /* Payment NOT confirmed — remove the pending reservation */
+          if (bk && bk.reservationId) {
+            removePendingReservation(bk.reservationId, sessionId);
+          }
+          showError('Le paiement n\'a pas ete confirme par Stripe (statut : ' + (data.payment_status || 'inconnu') + '). Si vous avez ete debite, contactez notre conciergerie avec votre reference Stripe.');
+        }
+      })
+      .catch(function(err) {
+        /* Network error — cannot verify, keep reservation as pending */
+        showError('Impossible de verifier le paiement pour le moment. Si vous avez bien paye, votre reservation sera confirmee sous peu. Conservez votre recu Stripe.');
+      });
+    })();
+  </script>
+</body>
+</html>

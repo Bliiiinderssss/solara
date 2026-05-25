@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detail propriete — Solara</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .prop-detail { margin-top: var(--nav-h); }
+
+    /* GALLERY — cinematic layout */
+    .gallery {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 380px 200px;
+      gap: 6px;
+      background: var(--ocean-dark);
+      overflow: hidden;
+    }
+    .gallery img {
+      width: 100%; height: 100%; object-fit: cover;
+      cursor: pointer;
+      transition: opacity 0.3s, transform 0.6s var(--ease-out);
+    }
+    .gallery img:hover { opacity: 0.9; transform: scale(1.02); }
+    .gallery .main-img { grid-row: span 2; }
+    .gallery-more { position: relative; cursor: pointer; }
+    .gallery-more::after {
+      content: 'Voir toutes les photos';
+      position: absolute; inset: 0;
+      background: rgba(29,53,87,0.55);
+      backdrop-filter: blur(2px);
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 500; letter-spacing: 0.04em;
+      transition: background 0.3s;
+    }
+    .gallery-more:hover::after { background: rgba(29,53,87,0.7); }
+
+    /* LAYOUT */
+    .detail-layout {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: var(--space-xl) var(--content-px);
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: var(--space-2xl);
+      align-items: start;
+    }
+
+    /* DETAIL HEADER */
+    .detail-header { margin-bottom: var(--space-lg); }
+    .detail-header .badges { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .detail-header h1 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      margin-bottom: 0.5rem;
+      color: var(--ocean);
+    }
+    .detail-meta { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
+    .detail-meta-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; color: var(--charcoal-mid); }
+    .detail-rating { display: flex; align-items: center; gap: 0.4rem; font-weight: 500; }
+    .detail-rating span { color: var(--gold); }
+
+    /* SECTION DIVIDER — soft, no hard rules */
+    .detail-divider {
+      border: none;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--beige-dark), transparent);
+      margin: var(--space-xl) 0;
+    }
+
+    /* Section titles */
+    .detail-left h3 {
+      color: var(--ocean);
+      border-bottom: 2px solid var(--gold);
+      display: inline-block;
+      padding-bottom: 4px;
+      margin-bottom: 1.25rem;
+    }
+
+    /* AMENITIES */
+    .amenities-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 0.75rem; }
+    .amenity-item {
+      display: flex; align-items: center; gap: 0.6rem;
+      font-size: 0.875rem; color: var(--charcoal-mid);
+      padding: 0.5rem 0.75rem;
+      background: var(--sand);
+      border-radius: var(--radius-sm);
+      transition: background 0.2s;
+    }
+    .amenity-item:hover { background: var(--beige); }
+    .amenity-check { color: var(--terra); font-weight: 600; }
+
+    /* CALENDAR */
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7,1fr);
+      gap: 2px;
+      margin-top: 1rem;
+    }
+    .cal-day-name { text-align: center; font-size: 0.7rem; font-weight: 500; color: var(--text-muted); text-transform: uppercase; padding: 0.5rem 0; }
+    .cal-day {
+      aspect-ratio: 1;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.82rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s var(--ease-out);
+      color: var(--charcoal-mid);
+    }
+    .cal-day:hover:not(.disabled):not(.booked):not(.selected):not(.in-range) { background: var(--beige); color: var(--ocean); }
+    .cal-day.today { font-weight: 600; color: var(--terra); }
+    .cal-day.booked { background: var(--beige-mid); color: var(--beige-dark); cursor: not-allowed; text-decoration: line-through; }
+    .cal-day.selected { background: var(--terra); color: white; font-weight: 600; }
+    .cal-day.in-range { background: rgba(196,113,74,0.15); color: var(--terra); }
+    .cal-day.disabled { color: var(--beige-dark); cursor: default; }
+    .cal-nav { display: flex; justify-content: space-between; align-items: center; }
+    .cal-nav-btn {
+      background: none; border: 1.5px solid var(--beige-dark); border-radius: var(--radius-sm);
+      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.2s var(--ease-out); font-size: 1rem;
+    }
+    .cal-nav-btn:hover { border-color: var(--terra); color: var(--terra); }
+    .cal-month { font-family: var(--font-display); font-size: 1.15rem; color: var(--ocean); }
+
+    /* BOOKING CARD — elevated with gold accent */
+    .booking-card {
+      background: var(--white);
+      border: 1px solid var(--beige-mid);
+      border-radius: var(--radius-xl);
+      padding: 2rem;
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      overflow: hidden;
+    }
+    .booking-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 3px; background: var(--gold);
+    }
+    .booking-price { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .booking-price .amount { font-family: var(--font-display); font-size: 2.2rem; color: var(--ocean); }
+    .booking-price .night { font-size: 0.875rem; color: var(--text-muted); }
+    .booking-dates { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--beige-dark); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 1rem; }
+    .booking-date-field { padding: 0.75rem 1rem; background: var(--sand); }
+    .booking-date-field:first-child { border-right: 1.5px solid var(--beige-dark); }
+    .booking-date-field label { display: block; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ocean-light); margin-bottom: 0.2rem; }
+    .booking-date-field input { border: none; outline: none; font-family: var(--font-body); font-size: 0.9rem; width: 100%; cursor: pointer; background: transparent; color: var(--dark); }
+    .booking-guests { border: 1.5px solid var(--beige-dark); border-radius: var(--radius-md); padding: 0.75rem 1rem; margin-bottom: 1.5rem; background: var(--sand); }
+    .booking-guests label { display: block; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ocean-light); margin-bottom: 0.2rem; }
+    .booking-guests select { border: none; outline: none; font-family: var(--font-body); font-size: 0.9rem; width: 100%; background: transparent; cursor: pointer; color: var(--dark); }
+    .booking-summary { background: var(--beige); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.5rem; display: none; }
+    .booking-summary.visible { display: block; }
+    .booking-summary-row { display: flex; justify-content: space-between; font-size: 0.875rem; margin-bottom: 0.5rem; color: var(--charcoal-mid); }
+    .booking-summary-row.total { border-top: 1.5px solid var(--beige-dark); padding-top: 0.75rem; margin-top: 0.5rem; font-weight: 600; font-size: 1rem; color: var(--ocean); }
+    .trust-badges { display: flex; gap: 0.75rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
+    .trust-badge { display: flex; align-items: center; gap: 0.3rem; font-size: 0.7rem; color: var(--text-muted); }
+
+    /* REVIEWS */
+
+    /* LIGHTBOX */
+    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.93); z-index: 3000; display: none; align-items: center; justify-content: center; }
+    .lightbox.open { display: flex; }
+    .lightbox img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: var(--radius-md); }
+    .lightbox-close { position: absolute; top: 1.5rem; right: 2rem; color: white; font-size: 2rem; cursor: pointer; background: none; border: none; transition: transform 0.2s; }
+    .lightbox-close:hover { transform: scale(1.1); }
+    .lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.1); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.15); color: white; font-size: 1.5rem; padding: 0.75rem 1rem; border-radius: var(--radius-sm); cursor: pointer; transition: background 0.2s; }
+    .lightbox-nav:hover { background: rgba(255,255,255,0.25); }
+    .lightbox-prev { left: 1rem; }
+    .lightbox-next { right: 1rem; }
+
+    /* Contact card */
+    .contact-card {
+      margin-top: 1.5rem;
+      background: var(--white);
+      border: 1px solid var(--beige-mid);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+    }
+
+    @media(max-width:900px) {
+      .gallery { grid-template-rows: 240px 140px; }
+      .detail-layout { grid-template-columns: 1fr; gap: var(--space-xl); }
+      .detail-right { position: static; }
+      .amenities-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- NAV -->
+  <nav class="nav scrolled">
+    <a href="index.html" class="nav-logo">Sol<span>ara</span></a>
+    <ul class="nav-links">
+      <li><a href="index.html">Proprietes</a></li>
+    </ul>
+    <div class="nav-right">
+      <a href="login.html" class="btn btn-ghost btn-sm">Espace Pro</a>
+      <a href="index.html" class="nav-cta">&larr; Retour</a>
+    </div>
+  </nav>
+
+  <div class="prop-detail page-enter" id="propDetail">
+    <!-- rendered by JS -->
+  </div>
+
+  <!-- LIGHTBOX -->
+  <div class="lightbox" id="lightbox">
+    <button class="lightbox-close" onclick="closeLightbox()">&#10005;</button>
+    <button class="lightbox-nav lightbox-prev" onclick="lbNav(-1)">&#8249;</button>
+    <img id="lbImg" src="" alt="">
+    <button class="lightbox-nav lightbox-next" onclick="lbNav(1)">&#8250;</button>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div>
+          <span class="footer-logo">Sol<span>ara</span></span>
+          <p>La conciergerie immobiliere premium pour voyager et vivre l'Espagne autrement.</p>
+        </div>
+        <div>
+          <h5>Informations</h5>
+          <ul><li><a href="#">A propos</a></li><li><a href="cgv.html">CGV</a></li><li><a href="confidentialite.html">Confidentialite</a></li><li><a href="#">Contact</a></li></ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2025 Solara. Tous droits reserves.</p>
+        <div class="payment-badges">
+          <span class="payment-badge">VISA</span>
+          <span class="payment-badge">MC</span>
+          <span class="payment-badge">STRIPE</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/app.js"></script>
+  <script src="js/data.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const propId = parseInt(params.get('id')) || 1;
+    var prop = PROPERTIES.find(p=>p.id===propId) || PROPERTIES[0];
+    document.title = prop.name + ' — Solara';
+
+    const detail = document.getElementById('propDetail');
+    detail.innerHTML = `
+      <!-- GALLERY -->
+      <div class="gallery reveal">
+        <img class="main-img" src="${prop.imgs[0]}" alt="${prop.name}" onclick="openLightbox(0)">
+        ${prop.imgs.slice(1,3).map((img,i) => `
+          <div class="${i===1&&prop.imgs.length>3?'gallery-more':''}" onclick="openLightbox(${i+1})">
+            <img src="${img}" alt="${prop.name}">
+          </div>`).join('')}
+      </div>
+
+      <!-- DETAIL LAYOUT -->
+      <div class="detail-layout">
+        <!-- LEFT COLUMN -->
+        <div class="detail-left">
+          <div class="detail-header reveal">
+            <div class="badges">
+              <span class="badge badge-terra">${prop.type}</span>
+              <span class="badge badge-ocean">${prop.badge}</span>
+            </div>
+            <h1>${prop.name}</h1>
+            <div style="font-size:0.9rem;color:var(--text-muted)">${prop.location}</div>
+            <div class="detail-meta">
+              <div class="detail-rating"><span>&#9733;</span> <strong>${prop.rating}</strong></div>
+              <div class="detail-meta-item">${prop.beds} chambres</div>
+              <div class="detail-meta-item">${prop.baths} salles de bain</div>
+              <div class="detail-meta-item">Jusqu'a ${prop.guests} personnes</div>
+            </div>
+          </div>
+
+          <hr class="detail-divider">
+
+          <div class="reveal">
+            <h3>A propos</h3>
+            <p>${prop.description}</p>
+            <p style="margin-top:0.75rem">La propriete est geree directement par notre equipe Solara locale. Un livret d'accueil digital vous sera envoye 48h avant votre arrivee.</p>
+          </div>
+
+          <hr class="detail-divider">
+
+          <div class="reveal">
+            <h3>Equipements</h3>
+            <div class="amenities-grid" style="margin-top:0.5rem">
+              ${prop.amenities.map(a => `
+                <div class="amenity-item">
+                  <span class="amenity-check">&#10003;</span>
+                  <span>${a}</span>
+                </div>`).join('')}
+            </div>
+          </div>
+
+          <hr class="detail-divider">
+
+          <!-- CALENDAR -->
+          <div class="reveal">
+            <h3>Disponibilites</h3>
+            <p style="font-size:0.875rem;margin-bottom:1.5rem;color:var(--text-muted)">Selectionnez vos dates d'arrivee et de depart.</p>
+            <div id="calendarContainer"></div>
+          </div>
+
+        </div>
+
+        <!-- RIGHT: BOOKING CARD -->
+        <div class="detail-right" style="position:sticky;top:calc(var(--nav-h) + 1.5rem)">
+          <div class="booking-card reveal">
+            <div class="booking-price">
+              <span class="amount">&euro;${prop.price}</span>
+              <span class="night">/ nuit</span>
+              <span style="margin-left:auto;font-size:0.8rem;color:var(--gold)">&#9733; ${prop.rating}</span>
+            </div>
+            <div class="booking-dates">
+              <div class="booking-date-field">
+                <label>Arrivee</label>
+                <input type="date" id="checkinDate" onchange="calcBooking()">
+              </div>
+              <div class="booking-date-field">
+                <label>Depart</label>
+                <input type="date" id="checkoutDate" onchange="calcBooking()">
+              </div>
+            </div>
+            <div class="booking-guests">
+              <label>Voyageurs</label>
+              <select>
+                ${Array.from({length:prop.guests},(_,i)=>`<option value="${i+1}">${i+1} voyageur${i?'s':''}</option>`).join('')}
+              </select>
+            </div>
+            <div class="booking-summary" id="bookingSummary"></div>
+            <button class="btn btn-gold" style="width:100%;justify-content:center;padding:1rem;font-size:0.95rem" id="bookBtn" onclick="goToBooking()">
+              Reserver maintenant
+            </button>
+            <div style="text-align:center;font-size:0.78rem;color:var(--text-muted);margin-top:0.75rem">
+              Aucun prelevement pour l'instant
+            </div>
+            <div class="trust-badges">
+              <div class="trust-badge">&#128274; Paiement securise</div>
+              <div class="trust-badge">&#10004; Propriete verifiee</div>
+              <div class="trust-badge">&#128260; Annulation flexible</div>
+            </div>
+          </div>
+
+          <!-- CONTACT HOST -->
+          <div class="contact-card reveal">
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
+              <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--terra-light),var(--beige));display:flex;align-items:center;justify-content:center;font-size:1.1rem;color:var(--terra-dark);font-weight:600">S</div>
+              <div>
+                <div style="font-weight:500;font-size:0.9rem;color:var(--ocean)">Equipe Solara</div>
+                <div style="font-size:0.75rem;color:var(--text-muted)">Conciergerie dediee</div>
+              </div>
+            </div>
+            <button class="btn btn-ghost" style="width:100%;justify-content:center">Contacter le gestionnaire</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    /* Calendar */
+    let calYear = new Date().getFullYear();
+    let calMonth = new Date().getMonth();
+    let selStart = null, selEnd = null;
+
+    /**
+     * Clean up stale pending reservations (older than 30 minutes without payment).
+     * This prevents fake or abandoned bookings from blocking the calendar.
+     */
+    function cleanupPendingReservations() {
+      var reservations = [];
+      try { reservations = JSON.parse(localStorage.getItem('solara_reservations') || '[]'); } catch(e) {}
+      var now = Date.now();
+      var THIRTY_MIN = 30 * 60 * 1000;
+      var cleaned = false;
+
+      reservations = reservations.filter(function(r) {
+        if (r.status === 'pending' && !r.paid && r.createdAt) {
+          var age = now - new Date(r.createdAt).getTime();
+          if (age > THIRTY_MIN) {
+            cleaned = true;
+            return false; // Remove stale pending reservation
+          }
+        }
+        return true;
+      });
+
+      if (cleaned) {
+        localStorage.setItem('solara_reservations', JSON.stringify(reservations));
+        var v = parseInt(localStorage.getItem('solara_version') || '0') + 1;
+        localStorage.setItem('solara_version', String(v));
+        try { new BroadcastChannel('solara_sync').postMessage({ action: 'reservation-cleanup', version: v }); } catch(e) {}
+      }
+      return reservations;
+    }
+
+    /**
+     * Get booked dates for this property from confirmed reservations only.
+     * Returns a Set of date strings (YYYY-MM-DD) that are unavailable.
+     */
+    function getBookedDates() {
+      cleanupPendingReservations();
+      var reservations = [];
+      try { reservations = JSON.parse(localStorage.getItem('solara_reservations') || '[]'); } catch(e) {}
+
+      var bookedSet = new Set();
+      reservations.forEach(function(r) {
+        /* Block dates for CONFIRMED and ACOMPTE (paid) reservations for this property */
+        if ((r.status !== 'confirmed' && r.status !== 'acompte') || !r.paid) return;
+        if (r.property !== prop.name && r.propId !== prop.id) return;
+        if (!r.checkin || !r.checkout) return;
+
+        var ci = new Date(r.checkin);
+        var co = new Date(r.checkout);
+        var d = new Date(ci);
+        while (d < co) {
+          bookedSet.add(d.toISOString().split('T')[0]);
+          d.setDate(d.getDate() + 1);
+        }
+      });
+      return bookedSet;
+    }
+
+    function renderCalendar() {
+      const months = ['Janvier','Fevrier','Mars','Avril','Mai','Juin','Juillet','Aout','Septembre','Octobre','Novembre','Decembre'];
+      const days = ['Lu','Ma','Me','Je','Ve','Sa','Di'];
+      const firstDay = new Date(calYear, calMonth, 1).getDay();
+      const offset = firstDay === 0 ? 6 : firstDay-1;
+      const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+      const today = new Date();
+      const bookedDates = getBookedDates();
+      const pad = n => String(n).padStart(2,'0');
+
+      let html = `
+        <div class="cal-nav">
+          <button class="cal-nav-btn" onclick="calNav(-1)">&#8249;</button>
+          <div class="cal-month">${months[calMonth]} ${calYear}</div>
+          <button class="cal-nav-btn" onclick="calNav(1)">&#8250;</button>
+        </div>
+        <div class="calendar-grid">
+          ${days.map(d=>`<div class="cal-day-name">${d}</div>`).join('')}
+          ${Array(offset).fill('<div></div>').join('')}
+          ${Array.from({length:daysInMonth},(_,i)=>{
+            const d = i+1;
+            const dateStr = `${calYear}-${pad(calMonth+1)}-${pad(d)}`;
+            const isToday = calYear===today.getFullYear()&&calMonth===today.getMonth()&&d===today.getDate();
+            const isBooked = bookedDates.has(dateStr);
+            const isPast = new Date(calYear,calMonth,d) < new Date(today.getFullYear(),today.getMonth(),today.getDate());
+            const isSel = selStart===d||selEnd===d;
+            const isRange = selStart&&selEnd&&d>Math.min(selStart,selEnd)&&d<Math.max(selStart,selEnd);
+            let cls = 'cal-day';
+            if(isPast) cls += ' disabled';
+            else if(isBooked) cls += ' booked';
+            else if(isSel) cls += ' selected';
+            else if(isRange) cls += ' in-range';
+            else if(isToday) cls += ' today';
+            return `<div class="${cls}" onclick="calSelect(${d},${isBooked||isPast})">${d}</div>`;
+          }).join('')}
+        </div>`;
+      document.getElementById('calendarContainer').innerHTML = html;
+    }
+
+    function calNav(dir) { calMonth+=dir; if(calMonth>11){calMonth=0;calYear++;}if(calMonth<0){calMonth=11;calYear--;} renderCalendar(); }
+    function calSelect(d, blocked) {
+      if(blocked) return;
+      if(!selStart||selEnd) { selStart=d; selEnd=null; }
+      else if(d>selStart) { selEnd=d; syncDates(); }
+      else { selStart=d; selEnd=null; }
+      renderCalendar();
+    }
+    function syncDates() {
+      if(!selStart||!selEnd) return;
+      const pad = n => String(n).padStart(2,'0');
+      document.getElementById('checkinDate').value = `${calYear}-${pad(calMonth+1)}-${pad(selStart)}`;
+      document.getElementById('checkoutDate').value = `${calYear}-${pad(calMonth+1)}-${pad(selEnd)}`;
+      calcBooking();
+    }
+    function calcBooking() {
+      const ci = document.getElementById('checkinDate').value;
+      const co = document.getElementById('checkoutDate').value;
+      if(!ci||!co) return;
+      const calc = calcSeasonalTotal(prop, ci, co);
+      if(calc.nights<=0) return;
+
+      /* Build summary — show per-season breakdown if prices vary */
+      const sumEl = document.getElementById('bookingSummary');
+      sumEl.classList.add('visible');
+      const prices = [...new Set(calc.perNight.map(n=>n.price))];
+      let rows = '';
+      if (prices.length === 1) {
+        rows = `<div class="booking-summary-row"><span>&euro;${prices[0]} &times; ${calc.nights} nuits</span><span>&euro;${calc.base}</span></div>`;
+      } else {
+        /* Group consecutive nights by price */
+        let groups = [], cur = null;
+        calc.perNight.forEach(n => {
+          if (cur && cur.price === n.price) { cur.count++; }
+          else { cur = { price: n.price, count: 1, season: getSeasonForDate(n.date) }; groups.push(cur); }
+        });
+        rows = groups.map(g => {
+          const label = g.season ? g.season.name : '';
+          return `<div class="booking-summary-row"><span>&euro;${g.price} &times; ${g.count} nuit${g.count>1?'s':''} <small style="color:var(--text-muted)">${label}</small></span><span>&euro;${g.price*g.count}</span></div>`;
+        }).join('');
+      }
+      rows += `<div class="booking-summary-row"><span>Frais de service</span><span>&euro;${calc.fees}</span></div>`;
+      rows += `<div class="booking-summary-row total"><span>Total</span><span>&euro;${calc.total}</span></div>`;
+      sumEl.innerHTML = rows;
+
+      localStorage.setItem('solaraBooking', JSON.stringify({ propId:prop.id, propName:prop.name, checkin:ci, checkout:co, nights:calc.nights, price:prop.price, base:calc.base, fees:calc.fees, total:calc.total }));
+    }
+    function goToBooking() {
+      const ci = document.getElementById('checkinDate').value;
+      const co = document.getElementById('checkoutDate').value;
+      if(!ci||!co) { showToast('Veuillez selectionner vos dates', 'error'); return; }
+
+      /* Check for date conflicts with confirmed reservations */
+      const bookedDates = getBookedDates();
+      const start = new Date(ci);
+      const end = new Date(co);
+      const d = new Date(start);
+      while (d < end) {
+        if (bookedDates.has(d.toISOString().split('T')[0])) {
+          showToast('Certaines dates selectionnees ne sont plus disponibles. Veuillez choisir d\'autres dates.', 'error');
+          renderCalendar();
+          return;
+        }
+        d.setDate(d.getDate() + 1);
+      }
+
+      window.location.href='booking.html';
+    }
+
+    /* Lightbox */
+    let lbIdx = 0;
+    function openLightbox(i) { lbIdx=i; document.getElementById('lbImg').src=prop.imgs[i]; document.getElementById('lightbox').classList.add('open'); }
+    function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
+    function lbNav(d) { lbIdx=(lbIdx+d+prop.imgs.length)%prop.imgs.length; document.getElementById('lbImg').src=prop.imgs[lbIdx]; }
+    document.addEventListener('keydown', e => { if(e.key==='Escape') closeLightbox(); if(e.key==='ArrowLeft') lbNav(-1); if(e.key==='ArrowRight') lbNav(1); });
+
+    /* Init */
+    renderCalendar();
+    const today = new Date();
+    const ci = new Date(today); ci.setDate(ci.getDate()+1);
+    const co = new Date(ci); co.setDate(co.getDate()+7);
+    const fmt = d => d.toISOString().split('T')[0];
+    document.getElementById('checkinDate').value = fmt(ci);
+    document.getElementById('checkoutDate').value = fmt(co);
+    calcBooking();
+
+    /* Sync — re-render calendar in real-time when reservations change */
+    onDataChange(function(action) {
+      /* Always re-render calendar on any data change (reservation confirmed, deleted, etc.) */
+      renderCalendar();
+
+      var updated = PROPERTIES.find(function(p) { return p.id === propId; });
+      if (!updated) {
+        showToast('Cette propriete a ete supprimee', 'error');
+        setTimeout(function() { window.location.href = 'index.html'; }, 1500);
+        return;
+      }
+      if (updated.name !== prop.name || updated.price !== prop.price ||
+          updated.location !== prop.location || updated.img !== prop.img ||
+          updated.description !== prop.description || updated.beds !== prop.beds ||
+          updated.baths !== prop.baths || updated.guests !== prop.guests ||
+          updated.badge !== prop.badge || updated.type !== prop.type) {
+        prop = updated;
+        showToast('Propriete mise a jour', 'success');
+        location.reload();
+      }
+    });
+  </script>
+</body>
+</html>
